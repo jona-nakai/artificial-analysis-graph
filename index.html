@@ -87,7 +87,6 @@ label.sw { display: inline-flex; align-items: center; gap: 7px; color: var(--tex
 .display { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0 0 2px; }
 .frontier-row { padding-top: 2px; min-height: 26px; }
 .axis-title .better { fill: var(--muted); }
-.lbl.dim { opacity: .3; }
 .legend .fr svg { width: 18px; height: 10px; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 14px 16px 0; color: var(--text-2); font-size: 12px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -641,17 +640,17 @@ function draw() {
   // labels (greedy, collision-avoiding)
   if (S.labels !== "off") {
     const lgp = el("g", {}, svg);
-    const placed = POINTS.map(p => ({ x0: p.px - 6, y0: p.py - 6, x1: p.px + 6, y1: p.py + 6 }));
+    // frontier mode: every frontier point gets its full name (incl. reasoning level) and the faded models get none,
+    // so only frontier markers count as obstacles
+    const placed = (focus ? FRONT : POINTS).map(p => ({ x0: p.px - 6, y0: p.py - 6, x1: p.px + 6, y1: p.py + 6 }));
     let cands;
-    if (S.labels === "family") {
-      // with the frontier on, a family that has frontier points is labelled at them (by level if only one is on it)
-      cands = Object.values(fam).map(ps => {
-        const on = ps.filter(p => p.front), use = on.length ? on : ps;
-        const at = [...use].sort((a, b) => a.py - b.py);
-        return { at, front: on.length > 0, text: use.length > 1 || (!on.length && ps.length > 1) ? at[0].m.base_model : at[0].m._label };
-      });
-    } else cands = POINTS.map(p => ({ at: [p], front: !!p.front, text: p.m._label }));
-    cands.sort((a, b) => (focus ? b.front - a.front : 0) || a.at[0].py - b.at[0].py);  // frontier labels get first pick
+    if (focus) cands = FRONT.map(p => ({ at: [p], text: p.m._label, must: true }));
+    else if (S.labels === "family") cands = Object.values(fam).map(ps => {
+      const at = [...ps].sort((a, b) => a.py - b.py);
+      return { at, text: ps.length > 1 ? at[0].m.base_model : at[0].m._label };
+    });
+    else cands = POINTS.map(p => ({ at: [p], text: p.m._label }));
+    cands.sort((a, b) => a.at[0].py - b.at[0].py);
     // points along the frontier line; a label tries to stay off it (falls back to ignoring it if there's no room)
     const line = [];
     for (let i = 1; i < FRONT.length; i++) {
@@ -660,21 +659,43 @@ function draw() {
     }
     const ctx = document.createElement("canvas").getContext("2d");
     ctx.font = "11px Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif";
+    const leaders = el("g", { stroke: cssVar("--muted"), "stroke-width": 0.75, "stroke-opacity": 0.7 }, lgp);
+    const DIRS = [[1, 0], [-1, 0], [0, -1], [0, 1], [1, -1], [-1, -1], [1, 1], [-1, 1]];
     for (const c of cands) {
       const w = ctx.measureText(c.text).width, h = 12;
-      const opts = c.at.flatMap(({ px, py }) => [[px + 8, py + 4, "start"], [px - 8, py + 4, "end"], [px, py - 9, "middle"],
+      const near = c.at.flatMap(({ px, py }) => [[px + 8, py + 4, "start"], [px - 8, py + 4, "end"], [px, py - 9, "middle"],
         [px, py + 17, "middle"], [px + 7, py - 6, "start"], [px - 7, py - 6, "end"], [px + 7, py + 14, "start"], [px - 7, py + 14, "end"]]);
-      place: for (const avoidLine of line.length ? [true, false] : [false]) for (const [tx, ty, anchor] of opts) {
+      // labels that must show (frontier) may move further out on a leader line when everything nearby is taken
+      const far = !c.must ? [] : [24, 38, 54, 72].flatMap(r => DIRS.map(([dx, dy]) => {
+        const { px, py } = c.at[0], k = dx && dy ? 0.75 : 1;
+        return [px + dx * r * k, py + dy * r * k + 4, dx > 0 ? "start" : dx < 0 ? "end" : "middle", { px, py, dx, dy }];
+      }));
+      const passes = line.length ? [[near, true], [near, false], [far, true], [far, false]] : [[near, false], [far, false]];
+      const boxOf = (tx, ty, anchor) => {
         const x0 = anchor === "start" ? tx : anchor === "end" ? tx - w : tx - w / 2;
-        const box = { x0: x0 - 1, y0: ty - h + 2, x1: x0 + w + 1, y1: ty + 3 };
-        if (box.x0 < M.l || box.x1 > W - 2 || box.y0 < 0 || box.y1 > H - M.b) continue;
+        return { x0: x0 - 1, y0: ty - h + 2, x1: x0 + w + 1, y1: ty + 3 };
+      };
+      const inBounds = box => box.x0 >= M.l && box.x1 <= W - 2 && box.y0 >= 0 && box.y1 <= H - M.b;
+      let spot = null;
+      place: for (const [opts, avoidLine] of passes) for (const o of opts) {
+        const box = boxOf(...o);
+        if (!inBounds(box)) continue;
         if (placed.some(b => !(box.x1 < b.x0 || box.x0 > b.x1 || box.y1 < b.y0 || box.y0 > b.y1))) continue;
         if (avoidLine && line.some(([x, y]) => x >= box.x0 && x <= box.x1 && y >= box.y0 - 1 && y <= box.y1 + 1)) continue;
-        placed.push(box);
-        const t = el("text", { x: tx, y: ty, "text-anchor": anchor, class: focus && !c.front ? "lbl dim" : "lbl" }, lgp);
-        t.textContent = c.text;
+        spot = o;
         break place;
       }
+      if (!spot && c.must) spot = near.find(o => inBounds(boxOf(...o))) || near[0];  // no room anywhere: overlap rather than drop it
+      if (!spot) continue;
+      const [tx, ty, anchor, lead] = spot;
+      placed.push(boxOf(tx, ty, anchor));
+      if (lead) {
+        const len = Math.hypot(lead.dx, lead.dy);
+        el("line", { x1: lead.px + lead.dx / len * 6, y1: lead.py + lead.dy / len * 6,
+          x2: tx - lead.dx * 2, y2: ty - 4 + (lead.dy > 0 ? -6 : lead.dy < 0 ? 4 : 0) }, leaders);
+      }
+      const t = el("text", { x: tx, y: ty, "text-anchor": anchor, class: "lbl" }, lgp);
+      t.textContent = c.text;
     }
   }
   svg._hover = el("circle", { r: 8.5, fill: "none", stroke: cssVar("--text"), "stroke-width": 1.5, display: "none" }, svg);
