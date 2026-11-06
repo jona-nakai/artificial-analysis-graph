@@ -1,0 +1,1090 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Explorer — Artificial Analysis snapshot</title>
+<style>
+/* Dark, monochrome chrome: the only color on the page is the labs' brand colors on the data. */
+:root {
+  color-scheme: dark;
+  --page: #09090a; --surface: #111113; --raised: #1a1a1d; --hover: rgba(255,255,255,0.035);
+  --border: rgba(255,255,255,0.07); --border-strong: rgba(255,255,255,0.13);
+  --text: #ececee; --text-2: #a3a3a8; --muted: #6c6c72; --faint: #47474c;
+  --grid: #1c1c1f; --axis: #2c2c30;
+  --r: 10px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--page); color: var(--text);
+  font: 13px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+::selection { background: rgba(255,255,255,.18); }
+* { scrollbar-width: thin; scrollbar-color: #2a2a2e transparent; }
+
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px 14px; padding: 14px 16px 16px; height: 100vh; }
+header.top { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 2px 2px 0; }
+.brand { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.brand-meta { color: var(--muted); font-size: 12px; }
+header.top .spacer { flex: 1; }
+main { min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
+aside { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+.card-head { display: flex; align-items: baseline; gap: 8px; padding: 13px 16px 0; }
+.card-head h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+.card-head .hint { color: var(--muted); font-size: 12px; }
+.card-head .right { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.card-head .right b { color: var(--text); font-weight: 600; }
+
+/* ---- controls ---- */
+button { font: inherit; color: var(--text-2); background: transparent; border: 1px solid var(--border-strong);
+  border-radius: 7px; padding: 4px 10px; cursor: pointer; white-space: nowrap; transition: background .12s, color .12s, border-color .12s; }
+button:hover { color: var(--text); background: var(--hover); }
+button:disabled { opacity: .35; cursor: default; }
+button.ghost { border-color: transparent; }
+button.link { border: 0; padding: 0 2px; color: var(--muted); font-size: 12px; background: none; }
+button.link:hover { color: var(--text); }
+button.primary { background: var(--text); color: var(--page); border-color: var(--text); font-weight: 600; }
+button.primary:hover { background: #fff; color: var(--page); }
+button.primary.idle { background: transparent; color: var(--text-2); border-color: var(--border-strong); font-weight: 500; }
+.seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--page); border: 1px solid var(--border); border-radius: 8px; }
+.seg button { border: 0; border-radius: 6px; padding: 3px 9px; font-size: 12px; color: var(--muted); }
+.seg button:hover { color: var(--text-2); background: transparent; }
+.seg button.on { background: var(--raised); color: var(--text); box-shadow: 0 0 0 1px var(--border-strong) inset; }
+.seg button:disabled { opacity: .3; }
+select, input[type=number], input[type=search], input[type=text] { font: inherit; color: var(--text); background: var(--page);
+  border: 1px solid var(--border-strong); border-radius: 7px; padding: 5px 9px; min-width: 0; outline: none; }
+select:focus, input:focus-visible { border-color: rgba(255,255,255,.28); }
+select { appearance: none; padding-right: 28px; cursor: pointer; text-overflow: ellipsis;
+  background: var(--page) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236c6c72' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center; }
+optgroup, option { background: var(--raised); color: var(--text); }
+input[type=number] { -moz-appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input::placeholder { color: var(--faint); }
+input[type=checkbox] { appearance: none; margin: 0; flex: none; cursor: pointer; width: 14px; height: 14px;
+  border: 1px solid var(--border-strong); border-radius: 4px; background: transparent; display: inline-grid; place-content: center;
+  transition: background .1s, border-color .1s; }
+input[type=checkbox]:hover { border-color: rgba(255,255,255,.3); }
+input[type=checkbox]:checked { background: var(--text); border-color: var(--text); }
+input[type=checkbox]:checked::after { content: ""; width: 7px; height: 4px; border: solid var(--page);
+  border-width: 0 0 1.7px 1.7px; transform: translateY(-1px) rotate(-45deg); }
+input[type=checkbox].switch { width: 26px; height: 15px; border-radius: 999px; background: var(--raised); position: relative; display: inline-block; }
+input[type=checkbox].switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--muted); border: 0; transform: none; transition: left .15s, background .15s; }
+input[type=checkbox].switch:checked { background: var(--text); border-color: var(--text); }
+input[type=checkbox].switch:checked::after { left: 13px; background: var(--page); }
+label.sw { display: inline-flex; align-items: center; gap: 7px; color: var(--text-2); font-size: 12px; cursor: pointer; user-select: none; }
+
+/* ---- chart card ---- */
+/* ---- sidebar: graph settings ---- */
+.settings { flex: none; }
+.settings .body { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; }
+.axis { display: flex; align-items: center; gap: 8px; }
+.axis .k { color: var(--muted); font-size: 11px; font-weight: 600; width: 10px; text-align: center; }
+.axis select { flex: 1; width: 0; }
+.display { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0 0 2px; }
+.frontier-row { padding-top: 2px; min-height: 26px; }
+.axis-title .better { fill: var(--muted); }
+.lbl.dim { opacity: .3; }
+.legend .fr svg { width: 18px; height: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 14px 16px 0; color: var(--text-2); font-size: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend svg { width: 10px; height: 10px; }
+#chartWrap { position: relative; padding: 4px 8px 0 4px; }
+svg { display: block; user-select: none; }
+#chart { width: 100%; }
+.tick text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.axis-title { fill: var(--text-2); font-size: 11.5px; }
+.empty-msg { fill: var(--muted); font-size: 13px; }
+.lbl { fill: var(--text-2); font-size: 11px; pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.chart-foot { padding: 6px 16px 13px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.chart-foot b { color: var(--text-2); font-weight: 500; }
+#tip { position: absolute; pointer-events: none; display: none; z-index: 5; min-width: 230px; max-width: 300px;
+  background: rgba(26,26,29,.96); border: 1px solid var(--border-strong); border-radius: 10px; padding: 10px 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.5); font-size: 12px; backdrop-filter: blur(6px); }
+#tip .t-name { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--text); }
+#tip .t-name svg { width: 9px; height: 9px; flex: none; }
+#tip .t-sub { color: var(--muted); margin: 1px 0 8px 16px; }
+#tip .row { display: flex; justify-content: space-between; gap: 14px; padding: 1px 0; }
+#tip .row b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; order: 2; }
+#tip .row span { color: var(--muted); }
+#tip .lead span { color: var(--text-2); }
+#tip .lead b { font-weight: 600; }
+#tip hr { border: 0; border-top: 1px solid var(--border); margin: 7px 0; }
+
+/* ---- table ---- */
+.tablewrap { max-height: 440px; overflow: auto; margin: 10px 0 0; border-top: 1px solid var(--border); border-radius: 0 0 var(--r) var(--r); }
+table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; text-align: right; white-space: nowrap; }
+td { border-bottom: 1px solid var(--grid); color: var(--text-2); }
+td:first-child { color: var(--text); }
+th:first-child, td:first-child { padding-left: 16px; }
+th:nth-child(-n+4), td:nth-child(-n+4) { text-align: left; }
+th { color: var(--muted); font-weight: 500; cursor: pointer; position: sticky; top: 0; background: var(--surface);
+  white-space: normal; vertical-align: bottom; line-height: 1.3; max-width: 120px;
+  box-shadow: inset 0 -1px 0 var(--border); user-select: none; }
+th:hover, th.sorted { color: var(--text); }
+td .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+tbody tr:hover td { background: var(--hover); }
+tbody tr:last-child td { border-bottom: 0; }
+.source { color: var(--faint); font-size: 11.5px; padding: 0 4px 4px; }
+a { color: inherit; text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 2px; }
+a:hover { color: var(--text); text-decoration-color: var(--text-2); }
+td a { text-decoration: none; }
+td a:hover { text-decoration: underline; }
+
+/* ---- sidebar: picker ---- */
+.picker { flex: 1 1 auto; min-height: 420px; display: flex; flex-direction: column; }
+.search { position: relative; margin: 12px 14px 0; }
+.search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--muted); }
+.search input { width: 100%; padding-left: 30px; }
+.listbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px 8px; }
+.listbar .lbl2 { color: var(--muted); font-size: 12px; }
+.listbar .right { margin-left: auto; display: flex; gap: 10px; }
+.models { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 2px 8px 6px; border-top: 1px solid var(--border); }
+.models label { position: relative; display: flex; align-items: center; gap: 9px; padding: 3.5px 8px 3.5px 14px; border-radius: 6px; cursor: pointer; }
+.models label:hover { background: var(--hover); }
+.models label .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.models label .n { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.models svg { width: 8px; height: 8px; flex: none; }
+/* no value for the current axes: dimmed but still pickable */
+.models label.na .nm, .models label.na .n { color: var(--faint); }
+.models label.na svg { opacity: .35; }
+.models label.na input:checked { background: var(--muted); border-color: var(--muted); }
+.models .labsep { height: 1px; background: var(--border); margin: 7px 6px; }
+.models .gap { margin-top: 5px; }
+/* a thin rail ties together one model's reasoning levels (Lab sort) */
+.models label.fam::before { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: var(--axis); }
+.models label.fam-start::before { top: 7px; border-radius: 2px 2px 0 0; }
+.models label.fam-end::before { bottom: 7px; border-radius: 0 0 2px 2px; }
+.list-note { padding: 7px 16px 9px; color: var(--muted); font-size: 11.5px; border-top: 1px solid var(--border); }
+.list-note i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); margin-right: 6px; vertical-align: 0; }
+
+/* ---- sidebar: filter ---- */
+.filter { flex: none; }
+.filter .body { padding: 4px 16px 0; }
+.field { margin-top: 10px; }
+.field-label { color: var(--text-2); font-size: 12px; }
+.field-head .hint2 { color: var(--faint); font-size: 11.5px; }
+.ranges { display: flex; flex-direction: column; gap: 6px; }
+.rrow { display: flex; align-items: center; gap: 5px; }
+.rrow select { flex: 1; width: 0; font-size: 12px; padding: 4px 22px 4px 8px; background-position: right 8px center; color: var(--text-2); }
+.rrow.active select { color: var(--text); }
+.rrow input { width: 64px; padding: 4px 6px; font-size: 12px; text-align: center; }
+.rrow.date input { width: 86px; }
+.rrow input.bad { border-color: #d9534f; }
+.rrow .dash { color: var(--faint); }
+.rrow .x { border: 0; padding: 2px 3px; color: var(--faint); font-size: 14px; line-height: 1; }
+.rrow .x:hover { color: var(--text); background: none; }
+.field-head { display: flex; align-items: center; gap: 10px; color: var(--text-2); font-size: 12px; margin-bottom: 7px; }
+.field-head .right { margin-left: auto; display: flex; gap: 10px; }
+.range { display: flex; align-items: center; gap: 8px; }
+.range input { width: 64px; text-align: center; padding: 4px 6px; }
+.range span { color: var(--faint); }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 7px; font-size: 12px; border-radius: 999px;
+  color: var(--faint); border-color: var(--border); }
+.chip svg { width: 7px; height: 7px; opacity: .3; }
+.chip .n { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chip.on { color: var(--text); background: var(--raised); border-color: var(--border-strong); }
+.chip.on svg { opacity: 1; }
+.chip.on .n { color: var(--muted); }
+/* input chips cycle: any (dim) -> must accept (on) -> must not accept (crossed out) */
+.chip.no { color: var(--text-2); border-style: dashed; border-color: var(--border-strong); }
+.chip.no .lab { text-decoration: line-through; text-decoration-color: var(--muted); }
+.chip.no .n { color: var(--muted); }
+button.link.on { color: var(--text); }
+.applybar { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 16px 12px; border-top: 1px solid var(--border);
+  background: rgba(255,255,255,.015); border-radius: 0 0 var(--r) var(--r); }
+.applybar .status { flex: 1; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.applybar .status b { color: var(--text); font-weight: 600; }
+.applybar .status .pending { display: block; color: var(--text-2); }
+.applybar .status .pending::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--text);
+  margin-right: 6px; vertical-align: 1px; }
+
+/* scroll latching: a wheel scroll that started on the page/sidebar keeps going there instead of being caught by
+   a nested list it passes over; one that started in a list stays in that list */
+.models, .tablewrap { overscroll-behavior: contain; }
+html.outer-scrolling .models, html.outer-scrolling .tablewrap { pointer-events: none; }
+
+@media (max-width: 960px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
+  main, aside { overflow: visible; }
+  .picker { min-height: 0; }
+  .models { max-height: 560px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="top">
+  <span class="brand">Model Explorer</span>
+  <span class="brand-meta" id="brandMeta"></span>
+  <span class="spacer"></span>
+  <button class="ghost" id="reset" title="Reset axes, display, picks and filters">Reset all</button>
+</header>
+
+<main>
+  <section class="card">
+    <div class="legend" id="legend"></div>
+    <div id="chartWrap"><svg id="chart" role="img" aria-label="Scatter plot of models"></svg><div id="tip"></div></div>
+    <div class="chart-foot" id="counts"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Models on the graph</h2><span class="hint">Click a column to sort</span></div>
+    <div class="tablewrap"><table id="table"></table></div>
+  </section>
+  <div class="source" id="source"></div>
+</main>
+
+<aside>
+  <section class="card settings">
+    <div class="card-head"><h2>Graph</h2><span class="hint">axes and display</span></div>
+    <div class="body">
+      <div class="axis"><span class="k">Y</span><select id="ySel" aria-label="Y axis"></select>
+        <span class="seg"><button data-axis="y" data-scale="linear">Lin</button><button data-axis="y" data-scale="log">Log</button></span></div>
+      <div class="axis"><span class="k">X</span><select id="xSel" aria-label="X axis"></select>
+        <span class="seg"><button data-axis="x" data-scale="linear">Lin</button><button data-axis="x" data-scale="log">Log</button></span></div>
+      <div class="display">
+        <label class="sw" title="Connect a model's reasoning levels"><input type="checkbox" class="switch" id="connect" checked> Lines</label>
+        <span class="seg" title="Point labels"><button data-labels="off">No labels</button><button data-labels="family">Per model</button><button data-labels="all">Every point</button></span>
+      </div>
+      <div class="display frontier-row">
+        <label class="sw" title="Models no other plotted model beats on both axes"><input type="checkbox" class="switch" id="frontier"> Pareto frontier</label>
+      </div>
+    </div>
+  </section>
+
+  <section class="card picker">
+    <div class="card-head"><h2>Picker</h2><span class="hint">choose what's on the graph</span><span class="right" id="pickCount"></span></div>
+    <div class="search">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6L14 14"/></svg>
+      <input type="search" id="search" placeholder="Search models or labs" aria-label="Search models">
+    </div>
+    <div class="listbar">
+      <span class="lbl2">Sort</span>
+      <span class="seg"><button data-psort="lab">Lab</button><button data-psort="ii">Intelligence</button></span>
+      <span class="right"><button class="link" id="mAll">Select all</button><button class="link" id="mNone">Select none</button></span>
+    </div>
+    <div class="models" id="modelList"></div>
+    <div class="list-note"><i></i>Dimmed: no data for these axes, so not drawn (still pickable)</div>
+  </section>
+
+  <section class="card filter">
+    <div class="card-head"><h2>Filter</h2><span class="hint">pick models by rule</span></div>
+    <div class="body">
+      <div class="field">
+        <div class="field-head">Ranges<span class="hint2">min – max, blank = any</span><span class="right"><button class="link" id="addRange">+ Add range</button></span></div>
+        <div class="ranges" id="ranges"></div>
+      </div>
+      <div class="field row-between">
+        <span class="seg"><button data-open="all">All</button><button data-open="open">Open</button><button data-open="prop">Proprietary</button></span>
+        <label class="sw"><input type="checkbox" class="switch" id="showDep"> Deprecated</label>
+      </div>
+      <div class="field">
+        <div class="field-head">Accepts input<span class="right"><button class="link" id="textOnly" title="Models that take nothing but text">Text only</button><button class="link" id="inputClear">Clear</button></span></div>
+        <div class="chips" id="inputChecks"></div>
+      </div>
+      <div class="field">
+        <div class="field-head">Lab country<span class="right"><button class="link" data-all="country">All</button><button class="link" data-none="country">None</button></span></div>
+        <div class="chips" id="countryChecks"></div>
+      </div>
+      <div class="field">
+        <div class="field-head">Lab<span class="right"><button class="link" data-all="creator">All</button><button class="link" data-none="creator">None</button></span></div>
+        <div class="chips" id="creatorChecks"></div>
+      </div>
+      <div class="field">
+        <div class="field-head">Reasoning level<span class="right"><button class="link" data-all="level">All</button><button class="link" data-none="level">None</button></span></div>
+        <div class="chips" id="levelChecks"></div>
+      </div>
+    </div>
+    <div class="applybar">
+      <span class="status" id="matchCount"></span>
+      <button id="fReset" class="ghost">Reset</button><button id="fApply" class="primary">Apply</button>
+    </div>
+  </section>
+</aside>
+</div>
+
+<script id="snapshot" type="application/json">/*__DATA__*/</script>
+<script>
+"use strict";
+const SNAP = JSON.parse(document.getElementById("snapshot").textContent);
+const MODELS = SNAP.models;
+
+// ---------- fields ----------
+const FIELDS = {
+  intelligence_index: { label: "Intelligence Index", fmt: v => v.toFixed(1) },
+  time_per_task_min: { label: "Time per task (min)", fmt: v => fmtNum(v) + " min", log: true },
+  cost_per_task_usd: { label: "Cost per task (USD)", fmt: usd, log: true },
+  price_input_usd_per_1m: { label: "Input price ($/1M tokens)", fmt: usd, log: true },
+  price_output_usd_per_1m: { label: "Output price ($/1M tokens)", fmt: usd, log: true },
+  price_cache_hit_usd_per_1m: { label: "Cache-hit price ($/1M tokens)", fmt: usd, log: true },
+  price_cache_write_usd_per_1m: { label: "Cache-write price ($/1M tokens)", fmt: usd, log: true },
+  output_speed_tok_s: { label: "Output speed (tokens/s)", fmt: v => fmtNum(v) + " tok/s", log: true },
+  ttft_s: { label: "Time to first token (s)", fmt: v => fmtNum(v) + " s", log: true },
+  ttfat_s: { label: "Time to first answer token (s)", fmt: v => fmtNum(v) + " s", log: true },
+  context_window_tokens: { label: "Context window (tokens)", fmt: tok, log: true },
+  output_tokens_per_task: { label: "Output tokens per task", fmt: tok, log: true },
+  reasoning_tokens_per_task: { label: "Reasoning tokens per task", fmt: tok, log: true },
+  answer_tokens_per_task: { label: "Answer tokens per task", fmt: tok, log: true },
+  cost_per_task_input_usd: { label: "Cost per task: input (USD)", fmt: usd, log: true },
+  cost_per_task_output_usd: { label: "Cost per task: output (USD)", fmt: usd, log: true },
+  parameters_b: { label: "Parameters (B)", fmt: v => fmtNum(v) + "B", log: true },
+  active_parameters_b: { label: "Active parameters (B)", fmt: v => fmtNum(v) + "B", log: true },
+  price_blended_3to1_usd_per_1m: { label: "Blended price 3:1 ($/1M tokens)", fmt: usd, log: true },
+  cost_per_task_cache_read_usd: { label: "Cost per task: cache read (USD)", fmt: usd, log: true },
+  cost_per_task_cache_write_usd: { label: "Cost per task: cache write (USD)", fmt: usd, log: true },
+  end_to_end_time_s: { label: "End-to-end response time (s)", fmt: v => fmtNum(v) + " s", log: true },
+  omniscience: { label: "Omniscience Index", fmt: v => v.toFixed(1) },
+  omniscience_accuracy: { label: "Omniscience accuracy", fmt: v => fmtNum(v) },
+  hallucination_rate: { label: "Hallucination rate (Omniscience)", fmt: v => fmtNum(v) },
+  release_date: { label: "Release date", fmt: v => new Date(v).toISOString().slice(0, 10), date: true },
+  knowledge_cutoff: { label: "Knowledge cutoff", fmt: v => new Date(v).toISOString().slice(0, 10), date: true },
+};
+const SHORT = { intelligence_index: "Intelligence", time_per_task_min: "Time / task (min)", cost_per_task_usd: "Cost / task ($)",
+  context_window_tokens: "Context window", output_speed_tok_s: "Speed (tok/s)", price_input_usd_per_1m: "Input $/1M",
+  price_output_usd_per_1m: "Output $/1M", price_cache_hit_usd_per_1m: "Cache-hit $/1M", price_cache_write_usd_per_1m: "Cache-write $/1M",
+  price_blended_3to1_usd_per_1m: "Blended $/1M", ttft_s: "First token (s)", ttfat_s: "First answer token (s)",
+  parameters_b: "Params (B)", active_parameters_b: "Active params (B)", output_tokens_per_task: "Output tokens / task",
+  reasoning_tokens_per_task: "Reasoning tokens / task", answer_tokens_per_task: "Answer tokens / task",
+  cost_per_task_input_usd: "Cost / task: input", cost_per_task_output_usd: "Cost / task: output",
+  cost_per_task_cache_read_usd: "Cost / task: cache read", cost_per_task_cache_write_usd: "Cost / task: cache write",
+  end_to_end_time_s: "End-to-end (s)", omniscience: "Omniscience", omniscience_accuracy: "Omniscience acc.",
+  hallucination_rate: "Hallucination rate", release_date: "Release date", knowledge_cutoff: "Knowledge cutoff" };
+const shortLabel = k => SHORT[k] || FIELDS[k].label.replace(/^(Benchmark|Capability index): /, "");
+// table headers go narrower still, since a one-word header can't wrap (full name is the header's tooltip)
+const COL_SHORT = { intelligence_index: "Intel. index", context_window_tokens: "Context" };
+const colLabel = k => COL_SHORT[k] || shortLabel(k);
+const SCORE_KEYS = [...new Set(MODELS.flatMap(m => Object.keys(m).filter(k => k.startsWith("score_"))))].sort();
+const BENCH_NAMES = { hle: "Humanity's Last Exam", hle_diamond: "HLE Diamond", gpqa: "GPQA Diamond", lcr: "AA-LCR (long context)",
+  mlcr_overall: "AA-MLCR", scicode: "SciCode", livecodebench: "LiveCodeBench", aime25: "AIME 2025", ifbench: "IFBench",
+  mmmu_pro: "MMMU-Pro", tau2: "τ²-Bench", tau_banking: "τ³-Banking", terminalbench_hard: "Terminal-Bench Hard",
+  terminal_bench21: "Terminal-Bench 2.1", terminal_bench40: "Terminal-Bench 4.0", terminal_bench_science: "Terminal-Bench Science",
+  critpt: "CritPt", critpt_agentic_hard: "CritPt Agentic Hard", gdpval: "GDPval-AA (Elo)", gdp_pdf_all_pass: "GDP PDF (all pass)",
+  frontier_code: "FrontierCode", frontier_code20: "FrontierCode 2.0", apex_agents: "APEX-Agents", analyst_agent: "AA Analyst Agent",
+  automation_bench_partial_score: "AutomationBench", it_bench_sre: "ITBench SRE", enterprise_ops_gym: "EnterpriseOps-Gym",
+  harvey_lab: "Harvey LAB", healthbench: "HealthBench", healthbench_professional: "HealthBench Professional",
+  vials_score: "VIALS", aa3d_elo: "AA 3D (Elo)", code2video_elo: "Code2Video (Elo)" };
+for (const k of SCORE_KEYS) FIELDS[k] = { label: "Benchmark: " + (BENCH_NAMES[k.slice(6)] || k.slice(6).replace(/[-_]/g, " ")), fmt: v => fmtNum(v) };
+for (const k of [...new Set(MODELS.flatMap(m => Object.keys(m).filter(k => k.startsWith("capability_"))))].sort())
+  FIELDS[k] = { label: "Capability index: " + k.slice(11).replace(/_/g, " "), fmt: v => v.toFixed(1) };
+
+function fmtNum(v) {
+  const a = Math.abs(v);
+  if (a >= 1000) return Math.round(v).toLocaleString("en-US");
+  if (a >= 100) return v.toFixed(0);
+  if (a >= 10) return v.toFixed(1);
+  if (a >= 1) return v.toFixed(2);
+  return v.toPrecision(2);
+}
+function usd(v) { return "$" + (v >= 100 ? v.toFixed(0) : v >= 1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : v.toPrecision(2)); }
+function tok(v) { return v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M" : v >= 1e3 ? (v / 1e3).toFixed(v >= 1e4 ? 0 : 1) + "k" : v.toFixed(0); }
+
+function val(m, key) {
+  const v = m[key];
+  if (v === null || v === undefined || v === "") return null;
+  if (FIELDS[key] && FIELDS[key].date) { const t = Date.parse(v); return isNaN(t) ? null : t; }
+  return typeof v === "number" && isFinite(v) ? v : null;
+}
+
+// ---------- derived categories ----------
+const LEVELS = ["Non-reasoning", "Minimal", "Low", "Medium", "High", "Xhigh", "Max", "Unspecified"];
+for (const m of MODELS) {
+  const l = m.reasoning_level;
+  m._level = l === "non-reasoning" ? "Non-reasoning"
+    : (l && l !== "reasoning") ? l[0].toUpperCase() + l.slice(1)
+    : m.is_reasoning === false ? "Non-reasoning" : "Unspecified";
+  m._creator = m.creator || "Unknown";
+  m._label = m.name.replace(/, Default Fallback/g, "");
+}
+const CREATORS = [...new Set(MODELS.map(m => m._creator))].sort((a, b) => a.localeCompare(b));
+const COUNTRY_NAMES = { us: "United States", cn: "China", fr: "France", ca: "Canada", ae: "UAE", gb: "United Kingdom",
+  de: "Germany", kr: "South Korea", jp: "Japan", il: "Israel", in: "India", ch: "Switzerland", sg: "Singapore" };
+for (const m of MODELS) m._country = m.creator_country ? (COUNTRY_NAMES[m.creator_country] || m.creator_country.toUpperCase()) : "Unknown";
+const COUNTRIES = [...new Set(MODELS.map(m => m._country))];
+const INPUTS = ["Image", "Speech", "Video"];  // every model takes text, so text is not a filter
+const FAMILY_KEY = m => m._creator + "|" + m.base_model;
+
+// ---------- state ----------
+// S.f is the filter draft; it only changes what is on the graph when applied (S.picked = models matching it).
+// numeric range filters: any numeric field; a row with neither bound set is ignored
+const RANGE_DEFAULTS = () => [["intelligence_index", 30], ["cost_per_task_usd"], ["time_per_task_min"], ["context_window_tokens"]]
+  .map(([key, min = null]) => ({ key, min, max: null, minText: min === null ? "" : String(min), maxText: "" }));
+const FILTER_DEFAULTS = () => ({ ranges: RANGE_DEFAULTS(), showDep: false, open: "all", inputs: new Map(),  // "Image" -> "yes" (must accept) | "no" (must not)
+  creators: new Set(CREATORS), levels: new Set(LEVELS), countries: new Set(COUNTRIES) });
+const DEFAULTS = () => {
+  const f = FILTER_DEFAULTS();
+  return { x: "cost_per_task_usd", y: "intelligence_index", xLog: false, yLog: false, connect: true, labels: "family", frontier: false,
+    f, picked: new Set(MODELS.filter(m => matches(m, f)).map(m => m.slug)), dirty: false,
+    pickSort: "lab", search: "", sort: { key: "y", dir: -1 } };
+};
+
+// ---------- filtering ----------
+function matches(m, f) {
+  for (const r of f.ranges) {
+    if (r.min === null && r.max === null) continue;
+    const v = val(m, r.key);
+    if (v === null) return false;  // no value for a field you set a bound on: excluded
+    if ((r.min !== null && v < r.min) || (r.max !== null && v > r.max)) return false;
+  }
+  if (!f.showDep && m.deprecated) return false;
+  if (f.open === "open" && m.is_open_weights !== true) return false;
+  if (f.open === "prop" && m.is_open_weights !== false) return false;
+  for (const [k, want] of f.inputs) if (!!m["input_modality_" + k.toLowerCase()] !== (want === "yes")) return false;
+  if (!f.creators.has(m._creator)) return false;
+  if (!f.levels.has(m._level)) return false;
+  if (!f.countries.has(m._country)) return false;
+  return true;
+}
+let S = DEFAULTS();
+// why a model can't be drawn on the current axes (null when it can)
+function missingReason(m) {
+  const x = val(m, S.x), y = val(m, S.y), miss = [];
+  if (y === null) miss.push(FIELDS[S.y].label); else if (S.yLog && y <= 0) miss.push(FIELDS[S.y].label + " (≤ 0 on a log axis)");
+  if (x === null) miss.push(FIELDS[S.x].label); else if (S.xLog && x <= 0) miss.push(FIELDS[S.x].label + " (≤ 0 on a log axis)");
+  return miss.length ? "No value for " + [...new Set(miss)].join(" or ") : null;
+}
+const plottable = m => missingReason(m) === null;
+
+// ---------- color ----------
+function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+// Each lab's brand color from Artificial Analysis. A color that would vanish into the dark surface (e.g. OpenAI's
+// near-black) is swapped for white.
+const _ctx = document.createElement("canvas").getContext("2d");
+function rgb(c) { _ctx.fillStyle = "#000"; _ctx.fillStyle = c; const h = _ctx.fillStyle;
+  return h.startsWith("#") ? [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)) : (h.match(/\d+/g) || [0, 0, 0]).slice(0, 3).map(Number); }
+function lum(c) { return rgb(c).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
+  .reduce((acc, v, i) => acc + v * [0.2126, 0.7152, 0.0722][i], 0); }
+function contrast(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); }
+const _colorCache = {};
+function styleFor(m) {
+  const key = m._creator;
+  if (_colorCache[key]) return _colorCache[key];
+  const surf = cssVar("--surface");
+  let fill = m.creator_color || cssVar("--muted");
+  if (contrast(fill, surf) < 1.6) fill = "#ffffff";
+  return (_colorCache[key] = { fill, ring: surf, group: key });
+}
+function legendItems(shown) {
+  const n = {};
+  for (const m of shown) n[m._creator] = (n[m._creator] || 0) + 1;
+  return Object.keys(n).sort((a, b) => labRank(a) - labRank(b) || n[b] - n[a] || a.localeCompare(b))
+    .map(c => ({ group: c, style: styleFor(shown.find(m => m._creator === c)) }));
+}
+
+// ---------- scales & ticks ----------
+function scale(vals, r0, r1, log, isDate) {
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (log) { lo = Math.log10(lo); hi = Math.log10(hi); }
+  if (lo === hi) { lo -= log ? 0.5 : (Math.abs(lo) * 0.1 || 1); hi += log ? 0.5 : (Math.abs(hi) * 0.1 || 1); }
+  const pad = (hi - lo) * 0.05; lo -= pad; hi += pad;
+  const f = v => r0 + ((log ? Math.log10(v) : v) - lo) / (hi - lo) * (r1 - r0);
+  f.domain = log ? [10 ** lo, 10 ** hi] : [lo, hi];
+  f.ticks = () => isDate ? dateTicks(...f.domain) : log ? logTicks(...f.domain) : linTicks(...f.domain, 7);
+  return f;
+}
+function linTicks(lo, hi, n) {
+  const raw = (hi - lo) / n, mag = 10 ** Math.floor(Math.log10(raw)), r = raw / mag;
+  const step = (r >= 7 ? 10 : r >= 3 ? 5 : r >= 1.5 ? 2 : 1) * mag;
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toPrecision(12));
+  return out;
+}
+function logTicks(lo, hi) {
+  const a = Math.floor(Math.log10(lo)), b = Math.ceil(Math.log10(hi));
+  if (b - a <= 1 && hi / lo < 10) { // inside one decade: linear-style ticks
+    return linTicks(lo, hi, 6).filter(v => v > 0);
+  }
+  const mults = b - a > 4 ? [1] : b - a > 2 ? [1, 3] : [1, 2, 5];
+  const out = [];
+  for (let e = a; e <= b; e++) for (const k of mults) { const v = k * 10 ** e; if (v >= lo && v <= hi) out.push(v); }
+  return out;
+}
+function dateTicks(lo, hi) {
+  const d0 = new Date(lo), months = (hi - lo) / (30.4 * 864e5);
+  const step = months > 36 ? 12 : months > 18 ? 6 : months > 8 ? 3 : 1;
+  const out = [];
+  let d = new Date(Date.UTC(d0.getUTCFullYear(), Math.ceil((d0.getUTCMonth() + 1) / step) * step - (step === 1 ? 0 : 0), 1));
+  while (d.getTime() < lo) d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+  while (d.getTime() <= hi) { if (d.getUTCMonth() % step === 0) out.push(d.getTime()); d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)); }
+  return out;
+}
+function tickFmt(key, v) {
+  const f = FIELDS[key];
+  if (f.date) return new Date(v).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+  if (f.fmt === tok) return tok(v);
+  const n = Number(v.toPrecision(6)).toLocaleString("en-US", { maximumFractionDigits: 6 });
+  return f.fmt === usd ? "$" + n : n;
+}
+
+// ---------- drawing ----------
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const svg = document.getElementById("chart"), tip = document.getElementById("tip"), wrap = document.getElementById("chartWrap");
+let POINTS = []; // {m, px, py, st}
+
+function marker(parent, cx, cy, st, r) {
+  return el("circle", { cx, cy, r, fill: st.fill, stroke: st.ring, "stroke-width": 1.5 }, parent);
+}
+function dotSvg(m, size = 8) {
+  const sv = el("svg", { viewBox: "0 0 10 10", width: size, height: size });
+  el("circle", { cx: 5, cy: 5, r: 5, fill: styleFor(m).fill }, sv);
+  return sv;
+}
+
+// ---------- Pareto frontier ----------
+// Which way is better per field: lower for money, time, latency, tokens, size and hallucination; higher for everything else
+// (scores, speed, context window, newer dates). Shown on each axis title.
+const LOWER_BETTER = /^(cost_|price_)|_time_|time_per_task|^ttft|^ttfat|tokens_per_task|hallucination|parameters_b$/;
+const defaultBetter = k => LOWER_BETTER.test(k) ? -1 : 1;
+const betterOf = axis => defaultBetter(S[axis]);
+const betterText = k => FIELDS[k].date ? (defaultBetter(k) > 0 ? "newer is better" : "older is better")
+  : defaultBetter(k) > 0 ? "higher is better" : "lower is better";
+function paretoFront(points) {
+  const dx = betterOf("x"), dy = betterOf("y");
+  const beats = (q, p) => dx * (q.vx - p.vx) >= 0 && dy * (q.vy - p.vy) >= 0 && (q.vx !== p.vx || q.vy !== p.vy);
+  return points.filter(p => !points.some(q => q !== p && beats(q, p))).sort((a, b) => a.vx - b.vx || a.vy - b.vy);
+}
+
+function axisTitle(node, key, log) {
+  node.textContent = FIELDS[key].label + (log ? " · log" : "");
+  const b = el("tspan", { class: "better" }, node); b.textContent = "  ·  " + betterText(key);
+}
+
+function draw() {
+  const picked = MODELS.filter(m => S.picked.has(m.slug));
+  const shown = picked.filter(plottable);
+  svg.textContent = "";
+  POINTS = [];
+  const W = Math.max(400, wrap.clientWidth - 12), H = Math.max(420, Math.min(660, Math.round(W * 0.56)));
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("height", H);
+  const M = { l: 62, r: 20, t: 16, b: 46 };
+
+  const nMissing = picked.length - shown.length, counts = document.getElementById("counts");
+  counts.textContent = "";
+  const b = document.createElement("b"); b.textContent = shown.length;
+  counts.append(b, ` plotted · ${picked.length} picked` + (nMissing ? ` · ${nMissing} picked without a value for these axes` : ""));
+
+  renderLegend(shown);
+  renderModelList();
+  renderTable(shown);
+
+  if (!shown.length) {
+    const t = el("text", { x: W / 2, y: H / 2, "text-anchor": "middle", class: "empty-msg" }, svg);
+    t.textContent = picked.length ? "None of the picked models have values for these axes." : "No models picked. Use the Picker or a Filter.";
+    return;
+  }
+  const xs = scale(shown.map(m => val(m, S.x)), M.l, W - M.r, S.xLog, FIELDS[S.x].date);
+  const ys = scale(shown.map(m => val(m, S.y)), H - M.b, M.t, S.yLog, FIELDS[S.y].date);
+
+  // grid + ticks
+  const g = el("g", {}, svg), grid = cssVar("--grid"), axis = cssVar("--axis");
+  for (const v of ys.ticks()) {
+    const y = ys(v);
+    el("line", { x1: M.l, x2: W - M.r, y1: y, y2: y, stroke: grid, "stroke-width": 1 }, g);
+    const t = el("text", { x: M.l - 10, y: y + 4, "text-anchor": "end" }, el("g", { class: "tick" }, g));
+    t.textContent = tickFmt(S.y, v);
+  }
+  for (const v of xs.ticks()) {
+    const x = xs(v);
+    el("line", { x1: x, x2: x, y1: M.t, y2: H - M.b, stroke: grid, "stroke-width": 1 }, g);
+    const t = el("text", { x, y: H - M.b + 18, "text-anchor": "middle" }, el("g", { class: "tick" }, g));
+    t.textContent = tickFmt(S.x, v);
+  }
+  el("line", { x1: M.l, x2: W - M.r, y1: H - M.b, y2: H - M.b, stroke: axis, "stroke-width": 1 }, g);
+  const xt = el("text", { x: (M.l + W - M.r) / 2, y: H - 8, "text-anchor": "middle", class: "axis-title" }, g);
+  axisTitle(xt, S.x, S.xLog);
+  const yt = el("text", { x: 0, y: 0, "text-anchor": "middle", class: "axis-title",
+    transform: `translate(14 ${(M.t + H - M.b) / 2}) rotate(-90)` }, g);
+  axisTitle(yt, S.y, S.yLog);
+
+  for (const m of shown) { const vx = val(m, S.x), vy = val(m, S.y); POINTS.push({ m, vx, vy, px: xs(vx), py: ys(vy), st: styleFor(m) }); }
+  const FRONT = S.frontier ? paretoFront(POINTS) : [];
+  for (const p of FRONT) p.front = true;
+  if (S.frontier) counts.append(` · ${FRONT.length} on the Pareto frontier`);
+  const focus = FRONT.length > 0;  // frontier on: everything off it fades back
+
+  // family lines
+  const fam = {};
+  for (const p of POINTS) (fam[FAMILY_KEY(p.m)] ||= []).push(p);
+  if (S.connect) {
+    const lg = el("g", {}, svg);
+    for (const k in fam) {
+      const ps = fam[k];
+      if (ps.length < 2) continue;
+      ps.sort((a, b) => LEVELS.indexOf(a.m._level) - LEVELS.indexOf(b.m._level) || a.px - b.px);
+      el("polyline", { points: ps.map(p => `${p.px},${p.py}`).join(" "), fill: "none",
+        stroke: ps[0].st.fill, "stroke-opacity": focus ? 0.1 : 0.42, "stroke-width": 1.5, "stroke-linejoin": "round" }, lg);
+    }
+  }
+
+  if (FRONT.length > 1)
+    el("polyline", { points: FRONT.map(p => `${p.px},${p.py}`).join(" "), fill: "none", stroke: cssVar("--text"),
+      "stroke-opacity": 0.75, "stroke-width": 1.5, "stroke-dasharray": "5 4", "stroke-linejoin": "round" }, svg);
+  const pg = el("g", {}, svg);
+  for (const p of FRONT) el("circle", { cx: p.px, cy: p.py, r: 7.5, fill: "none", stroke: cssVar("--text"), "stroke-opacity": 0.6, "stroke-width": 1 }, pg);
+  for (const p of focus ? [...POINTS.filter(p => !p.front), ...FRONT] : POINTS) {  // frontier points drawn on top
+    p.node = marker(pg, p.px, p.py, p.st, 4.75);
+    if (focus && !p.front) p.node.setAttribute("opacity", 0.2);
+  }
+
+  // labels (greedy, collision-avoiding)
+  if (S.labels !== "off") {
+    const lgp = el("g", {}, svg);
+    const placed = POINTS.map(p => ({ x0: p.px - 6, y0: p.py - 6, x1: p.px + 6, y1: p.py + 6 }));
+    let cands;
+    if (S.labels === "family") {
+      // with the frontier on, a family that has frontier points is labelled at them (by level if only one is on it)
+      cands = Object.values(fam).map(ps => {
+        const on = ps.filter(p => p.front), use = on.length ? on : ps;
+        const at = [...use].sort((a, b) => a.py - b.py);
+        return { at, front: on.length > 0, text: use.length > 1 || (!on.length && ps.length > 1) ? at[0].m.base_model : at[0].m._label };
+      });
+    } else cands = POINTS.map(p => ({ at: [p], front: !!p.front, text: p.m._label }));
+    cands.sort((a, b) => (focus ? b.front - a.front : 0) || a.at[0].py - b.at[0].py);  // frontier labels get first pick
+    // points along the frontier line; a label tries to stay off it (falls back to ignoring it if there's no room)
+    const line = [];
+    for (let i = 1; i < FRONT.length; i++) {
+      const a = FRONT[i - 1], b = FRONT[i], n = Math.max(1, Math.ceil(Math.hypot(b.px - a.px, b.py - a.py) / 3));
+      for (let j = 0; j <= n; j++) line.push([a.px + (b.px - a.px) * j / n, a.py + (b.py - a.py) * j / n]);
+    }
+    const ctx = document.createElement("canvas").getContext("2d");
+    ctx.font = "11px Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif";
+    for (const c of cands) {
+      const w = ctx.measureText(c.text).width, h = 12;
+      const opts = c.at.flatMap(({ px, py }) => [[px + 8, py + 4, "start"], [px - 8, py + 4, "end"], [px, py - 9, "middle"],
+        [px, py + 17, "middle"], [px + 7, py - 6, "start"], [px - 7, py - 6, "end"], [px + 7, py + 14, "start"], [px - 7, py + 14, "end"]]);
+      place: for (const avoidLine of line.length ? [true, false] : [false]) for (const [tx, ty, anchor] of opts) {
+        const x0 = anchor === "start" ? tx : anchor === "end" ? tx - w : tx - w / 2;
+        const box = { x0: x0 - 1, y0: ty - h + 2, x1: x0 + w + 1, y1: ty + 3 };
+        if (box.x0 < M.l || box.x1 > W - 2 || box.y0 < 0 || box.y1 > H - M.b) continue;
+        if (placed.some(b => !(box.x1 < b.x0 || box.x0 > b.x1 || box.y1 < b.y0 || box.y0 > b.y1))) continue;
+        if (avoidLine && line.some(([x, y]) => x >= box.x0 && x <= box.x1 && y >= box.y0 - 1 && y <= box.y1 + 1)) continue;
+        placed.push(box);
+        const t = el("text", { x: tx, y: ty, "text-anchor": anchor, class: focus && !c.front ? "lbl dim" : "lbl" }, lgp);
+        t.textContent = c.text;
+        break place;
+      }
+    }
+  }
+  svg._hover = el("circle", { r: 8.5, fill: "none", stroke: cssVar("--text"), "stroke-width": 1.5, display: "none" }, svg);
+}
+
+// ---------- hover (nearest point within 12px) ----------
+svg.addEventListener("pointermove", ev => {
+  const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+  const sx = vb.width / r.width, x = (ev.clientX - r.left) * sx, y = (ev.clientY - r.top) * sx;
+  let best = null, bd = (12 * sx) ** 2;
+  const focus = POINTS.some(p => p.front);  // frontier mode: only frontier models are hoverable
+  for (const p of POINTS) { if (focus && !p.front) continue; const d = (p.px - x) ** 2 + (p.py - y) ** 2; if (d < bd) { bd = d; best = p; } }
+  if (!best) return hideTip();
+  showTip(best, ev.clientX - wrap.getBoundingClientRect().left, ev.clientY - wrap.getBoundingClientRect().top);
+});
+svg.addEventListener("pointerleave", hideTip);
+function hideTip() { tip.style.display = "none"; if (svg._hover) svg._hover.setAttribute("display", "none"); }
+function ringAt(p) {
+  if (!svg._hover) return;
+  const r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+  svg._hover.setAttribute("cx", p.px); svg._hover.setAttribute("cy", p.py); svg._hover.setAttribute("display", "");
+  return { cx: p.px * r.width / vb.width + (r.left - wrap.getBoundingClientRect().left),
+    cy: p.py * r.height / vb.height + (r.top - wrap.getBoundingClientRect().top) };
+}
+function showTip(p, cx, cy) {
+  const m = p.m;
+  ringAt(p);
+  tip.textContent = "";
+  const div = (cls, text) => { const d = document.createElement("div"); d.className = cls; if (text !== undefined) d.textContent = text; tip.appendChild(d); return d; };
+  div("t-name").append(dotSvg(m, 9), m._label);
+  div("t-sub", [m._creator, m._level, m.is_open_weights ? "open weights" : m.is_open_weights === false ? "proprietary" : null,
+    m.is_multimodal ? "multimodal" : m.is_multimodal === false ? "text only" : null,
+    m.deprecated ? "deprecated" : null].filter(Boolean).join(" · "));
+  const row = (label, key, lead) => {
+    const v = val(m, key); if (v === null) return;
+    const d = div("row" + (lead ? " lead" : ""));
+    const b = document.createElement("b"); b.textContent = FIELDS[key].fmt(v);
+    const s = document.createElement("span"); s.textContent = label;
+    d.append(b, s);
+  };
+  row(FIELDS[S.y].label, S.y, true);
+  if (S.x !== S.y) row(FIELDS[S.x].label, S.x, true);
+  tip.appendChild(document.createElement("hr"));
+  for (const k of ["intelligence_index", "time_per_task_min", "cost_per_task_usd", "price_input_usd_per_1m",
+    "price_output_usd_per_1m", "output_speed_tok_s", "ttft_s", "output_tokens_per_task", "context_window_tokens",
+    "parameters_b", "release_date"]) if (k !== S.x && k !== S.y) row(FIELDS[k].label, k);
+  if (m.input_modalities) {
+    const d = div("row"), b = document.createElement("b"), s = document.createElement("span");
+    b.textContent = m.input_modalities.replace(/^./, c => c.toUpperCase()); s.textContent = "Input";
+    d.append(b, s);
+  }
+  tip.style.display = "block";
+  const tw = tip.offsetWidth, th = tip.offsetHeight, ww = wrap.clientWidth;
+  tip.style.left = (cx + 18 + tw > ww ? cx - tw - 18 : cx + 18) + "px";
+  tip.style.top = Math.max(0, Math.min(cy - th / 2, wrap.clientHeight - th)) + "px";
+}
+
+// ---------- legend ----------
+function renderLegend(shown) {
+  const lg = document.getElementById("legend"); lg.textContent = "";
+  for (const it of legendItems(shown)) {
+    const s = document.createElement("span");
+    s.append(dotSvg(shown.find(m => m._creator === it.group), 8), it.group);
+    lg.appendChild(s);
+  }
+  if (S.frontier && shown.length) {
+    const s = document.createElement("span"); s.className = "fr";
+    const sv = el("svg", { viewBox: "0 0 18 10", width: 18, height: 10 });
+    el("line", { x1: 1, x2: 17, y1: 5, y2: 5, stroke: cssVar("--text"), "stroke-opacity": 0.75, "stroke-width": 1.5, "stroke-dasharray": "4 3" }, sv);
+    s.append(sv, "Pareto frontier");
+    lg.appendChild(s);
+  }
+}
+
+// ---------- filter chips ----------
+function chipList(id, items, set, counts, withDot) {
+  const box = document.getElementById(id); box.textContent = "";
+  for (const it of items) {
+    const c = document.createElement("button");
+    c.className = "chip" + (set.has(it) ? " on" : ""); c.setAttribute("aria-pressed", set.has(it));
+    c.onclick = () => { set.has(it) ? set.delete(it) : set.add(it); filterChanged(); };
+    if (withDot) c.append(dotSvg(MODELS.find(m => m._creator === it), 7));
+    const n = document.createElement("span"); n.className = "n"; n.textContent = counts[it] || 0;
+    c.append(it, n);
+    box.appendChild(c);
+  }
+}
+// input chips: the count is how many models you'd get with the chip in its current state (any: how many accept it)
+function renderInputChips() {
+  const box = document.getElementById("inputChecks"); box.textContent = "";
+  for (const k of INPUTS) {
+    const state = S.f.inputs.get(k), acc = m => !!m["input_modality_" + k.toLowerCase()];
+    const rest = new Map(S.f.inputs); rest.delete(k);
+    const pool = MODELS.filter(m => matches(m, { ...S.f, inputs: rest }));
+    const c = document.createElement("button");
+    c.className = "chip" + (state === "yes" ? " on" : state === "no" ? " no" : "");
+    c.title = state === "yes" ? `Must accept ${k.toLowerCase()} · click: must not accept` : state === "no" ? `Must not accept ${k.toLowerCase()} · click: any`
+      : `Any · click: must accept ${k.toLowerCase()}`;
+    c.onclick = () => { state === "yes" ? S.f.inputs.set(k, "no") : state === "no" ? S.f.inputs.delete(k) : S.f.inputs.set(k, "yes"); filterChanged(); };
+    const lab = document.createElement("span"); lab.className = "lab"; lab.textContent = k;
+    const n = document.createElement("span"); n.className = "n"; n.textContent = pool.filter(m => state === "no" ? !acc(m) : acc(m)).length;
+    c.append(lab, n);
+    box.appendChild(c);
+  }
+  const textOnly = INPUTS.every(k => S.f.inputs.get(k) === "no");
+  document.getElementById("textOnly").classList.toggle("on", textOnly);
+}
+function renderFacetLists() {
+  // counts ignore the lab/level facets themselves so you can see what turning one on would add
+  const base = MODELS.filter(m => matches(m, { ...S.f, creators: new Set(CREATORS), levels: new Set(LEVELS), countries: new Set(COUNTRIES) }));
+  const cc = {}, lc = {}, nc = {};
+  for (const m of base) { cc[m._creator] = (cc[m._creator] || 0) + 1; lc[m._level] = (lc[m._level] || 0) + 1; nc[m._country] = (nc[m._country] || 0) + 1; }
+  renderInputChips();
+  chipList("countryChecks", COUNTRIES.filter(c => nc[c]).sort((a, b) => nc[b] - nc[a] || a.localeCompare(b)), S.f.countries, nc, false);
+  chipList("creatorChecks", CREATORS.filter(c => cc[c]).sort((a, b) => labRank(a) - labRank(b) || cc[b] - cc[a] || a.localeCompare(b)),
+    S.f.creators, cc, true);
+  chipList("levelChecks", [...LEVELS].reverse().filter(l => lc[l]).sort((a, b) => (a === "Unspecified") - (b === "Unspecified")),
+    S.f.levels, lc, false);
+}
+// "$0.50", "200k", "1M", "2026-08-01" -> number (NaN if unreadable, null if blank)
+function parseBound(key, s) {
+  s = s.trim();
+  if (!s) return null;
+  if (FIELDS[key].date) { const t = Date.parse(s); return isNaN(t) ? NaN : t; }
+  const m = s.replace(/[$,\s]/g, "").match(/^(-?\d*\.?\d+)([km])?$/i);
+  if (!m) return NaN;
+  const unit = (m[2] || "").toLowerCase();
+  const n = +m[1];
+  if (FIELDS[key].fmt !== tok) return n * (unit === "m" ? 1e6 : unit === "k" ? 1e3 : 1);
+  // token counts need a unit ("500k", "1M") unless written out in full ("500000"); a short bare number like "5" is
+  // ambiguous (5k? 5M?), so it's rejected rather than guessed
+  if (!unit && n < 1e4) return NaN;
+  return Math.round(n * (unit === "m" ? 1e6 : unit === "k" ? 1e3 : 1));
+}
+// how a token bound is written back once you leave the box: 200000 -> "200k", 1050000 -> "1.05M"
+const tokText = v => v >= 1e6 ? +(v / 1e6).toPrecision(4) + "M" : +(v / 1e3).toPrecision(4) + "k";
+function boundHint(key, v) {
+  const f = FIELDS[key];
+  if (f.date) return new Date(v).toISOString().slice(0, 10);
+  if (f.fmt === tok) return tok(v);
+  const n = String(+v.toPrecision(3));
+  return f.fmt === usd ? "$" + n : n;
+}
+let _rangeOpts = null;
+function renderRanges() {
+  if (!_rangeOpts) { _rangeOpts = document.createElement("select"); fillOptions(_rangeOpts, false); }
+  const box = document.getElementById("ranges"); box.textContent = "";
+  S.f.ranges.forEach((r, i) => {
+    const row = document.createElement("div"); row.className = "rrow" + (FIELDS[r.key].date ? " date" : "");
+    const sel = _rangeOpts.cloneNode(true); sel.value = r.key; sel.title = FIELDS[r.key].label;
+    sel.setAttribute("aria-label", "Range field");
+    sel.onchange = () => { Object.assign(r, { key: sel.value, min: null, max: null, minText: "", maxText: "" }); renderRanges(); filterChanged(); };
+    const vs = MODELS.map(m => val(m, r.key)).filter(v => v !== null);
+    const input = (side, hint) => {
+      const inp = document.createElement("input"); inp.type = "text"; inp.inputMode = FIELDS[r.key].date ? "text" : "decimal";
+      inp.value = r[side + "Text"]; inp.placeholder = vs.length ? hint : side; inp.setAttribute("aria-label", `${FIELDS[r.key].label} ${side}`);
+      inp.title = FIELDS[r.key].date ? "A date, e.g. 2026-08-01"
+        : FIELDS[r.key].fmt === tok ? "Add k or M, e.g. 500k or 1M (or the full count, 500000)"
+        : "A number; $ is fine (e.g. $0.50)";
+      const tip0 = inp.title;
+      const read = () => {
+        const v = parseBound(r.key, inp.value), bad = Number.isNaN(v);
+        inp.classList.toggle("bad", bad); r[side] = bad ? null : v;
+        inp.title = bad && FIELDS[r.key].fmt === tok && /^\s*[\d.]+\s*$/.test(inp.value) ? `Add k or M: ${inp.value.trim()}k or ${inp.value.trim()}M?` : tip0;
+      };
+      read();
+      inp.oninput = () => { r[side + "Text"] = inp.value; read(); row.classList.toggle("active", r.min !== null || r.max !== null); filterChanged(); };
+      if (FIELDS[r.key].fmt === tok) inp.onchange = () => { if (r[side] !== null) inp.value = r[side + "Text"] = tokText(r[side]); };
+      return inp;
+    };
+    const lo = input("min", vs.length ? boundHint(r.key, Math.min(...vs)) : ""), hi = input("max", vs.length ? boundHint(r.key, Math.max(...vs)) : "");
+    const dash = document.createElement("span"); dash.className = "dash"; dash.textContent = "–";
+    const x = document.createElement("button"); x.className = "x"; x.textContent = "×"; x.title = "Remove range";
+    x.onclick = () => { const set = r.min !== null || r.max !== null; S.f.ranges.splice(i, 1); renderRanges(); if (set) filterChanged(); };
+    row.classList.toggle("active", r.min !== null || r.max !== null);
+    row.append(sel, lo, dash, hi, x);
+    box.appendChild(row);
+  });
+}
+function renderMatch() {
+  const n = MODELS.filter(m => matches(m, S.f)).length;
+  const st = document.getElementById("matchCount"); st.textContent = "";
+  const b = document.createElement("b"); b.textContent = n;
+  st.append(b, ` model${n === 1 ? "" : "s"} match`);
+  if (S.dirty) { const p = document.createElement("span"); p.className = "pending"; p.textContent = "Not applied yet"; st.append(p); }
+  document.getElementById("fApply").classList.toggle("idle", !S.dirty);
+}
+function filterChanged() { S.dirty = true; renderFacetLists(); renderMatch(); }
+function applyFilter() {
+  const hits = MODELS.filter(m => matches(m, S.f)).map(m => m.slug);
+  S.picked = new Set(hits);
+  S.dirty = false; renderMatch(); draw();
+}
+
+// ---------- picker ----------
+let LIST_SHOWN = [];
+// "Lab" order: rough tiers of labs; labs not listed follow, ordered by their best Intelligence Index. Inside a lab,
+// model families go newest release first, and a family's reasoning levels go Max -> Non-reasoning.
+const LAB_ORDER = ["OpenAI", "Anthropic", "Google", "Meta", "SpaceXAI", "DeepSeek", "Alibaba", "Kimi", "Z AI", "MiniMax",
+  "Xiaomi", "Tencent", "Mistral", "Thinking Machines"];
+const iiOf = m => val(m, "intelligence_index") ?? -1;
+const BEST = { lab: {}, famDate: {} };  // a lab's best score; a family's newest release date
+for (const m of MODELS) {
+  BEST.lab[m._creator] = Math.max(BEST.lab[m._creator] ?? -1, iiOf(m));
+  const d = m.release_date || "", k = FAMILY_KEY(m);
+  if (d > (BEST.famDate[k] || "")) BEST.famDate[k] = d;
+}
+function labRank(c) { const i = LAB_ORDER.indexOf(c); return i >= 0 ? i : LAB_ORDER.length + 100 - (BEST.lab[c] ?? -1) / 100; }
+function byLab(a, b) {
+  return labRank(a._creator) - labRank(b._creator) || a._creator.localeCompare(b._creator)
+    || (BEST.famDate[FAMILY_KEY(b)] || "").localeCompare(BEST.famDate[FAMILY_KEY(a)] || "")  // newest family first
+    || FAMILY_KEY(a).localeCompare(FAMILY_KEY(b))
+    || levelRank(a) - levelRank(b) || iiOf(b) - iiOf(a) || a.name.localeCompare(b.name);
+}
+// within a model family: Max, Xhigh, High, Medium, Low, Minimal, Non-reasoning, then unspecified
+function levelRank(m) { return m._level === "Unspecified" ? 99 : LEVELS.length - LEVELS.indexOf(m._level); }
+const byII = (a, b) => iiOf(b) - iiOf(a) || a.name.localeCompare(b.name);
+function renderModelList() {
+  const q = S.search.trim().toLowerCase();
+  const byLabMode = S.pickSort === "lab";
+  LIST_SHOWN = MODELS.filter(m => !q || m.name.toLowerCase().includes(q) || m._creator.toLowerCase().includes(q))
+    .sort(byLabMode ? byLab : byII);
+  const box = document.getElementById("modelList"), top = box.scrollTop;
+  const famOf = i => LIST_SHOWN[i] && FAMILY_KEY(LIST_SHOWN[i]);
+  box.textContent = "";
+  LIST_SHOWN.forEach((m, i) => {
+    const lab = document.createElement("label"), on = S.picked.has(m.slug);
+    if (byLabMode) {
+      const newLab = i > 0 && m._creator !== LIST_SHOWN[i - 1]._creator;
+      if (newLab) { const sep = document.createElement("div"); sep.className = "labsep"; box.appendChild(sep); }
+      const f = famOf(i), start = famOf(i - 1) !== f, end = famOf(i + 1) !== f;  // rail over a family's rows
+      if (!(start && end)) lab.classList.add("fam");
+      if (start && !end) lab.classList.add("fam-start");
+      if (end && !start) lab.classList.add("fam-end");
+      if (start && i > 0 && !newLab) lab.classList.add("gap");
+    }
+    const why = missingReason(m);
+    if (why) { lab.classList.add("na"); lab.title = why; }
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = on;
+    cb.onchange = () => { cb.checked ? S.picked.add(m.slug) : S.picked.delete(m.slug); draw(); };
+    const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = m._label;
+    const n = document.createElement("span"); n.className = "n";
+    const ii = val(m, "intelligence_index"); n.textContent = ii === null ? "–" : ii.toFixed(1);
+    lab.append(cb, dotSvg(m), nm, n);
+    // hovering a row rings its point on the chart
+    lab.onmouseenter = () => { const p = POINTS.find(p => p.m === m); if (p) ringAt(p); };
+    lab.onmouseleave = () => { if (svg._hover && tip.style.display !== "block") svg._hover.setAttribute("display", "none"); };
+    box.appendChild(lab);
+  });
+  box.scrollTop = top;
+  const pc = document.getElementById("pickCount"); pc.textContent = "";
+  const b = document.createElement("b"); b.textContent = S.picked.size;
+  pc.append(b, ` / ${MODELS.length}`);
+}
+
+// ---------- table ----------
+function renderTable(shown) {
+  const cols = [
+    { k: "name", label: "Model", get: m => m._label, fmt: v => v },
+    { k: "creator", label: "Lab", get: m => m._creator, fmt: v => v },
+    { k: "level", label: "Level", get: m => m._level, fmt: v => v },
+    // every model takes text, so the column lists only what else it accepts
+    { k: "inputs", label: "Input", get: m => m.input_modalities ? (m.input_modalities.split(", ").filter(x => x !== "text").join(", ") || "text only") : null, fmt: v => v },
+    { k: "y", label: colLabel(S.y), full: FIELDS[S.y].label, get: m => val(m, S.y), fmt: FIELDS[S.y].fmt },
+    { k: "x", label: colLabel(S.x), full: FIELDS[S.x].label, get: m => val(m, S.x), fmt: FIELDS[S.x].fmt },
+    ...["intelligence_index", "time_per_task_min", "cost_per_task_usd", "price_input_usd_per_1m", "price_output_usd_per_1m",
+      "output_speed_tok_s", "context_window_tokens"].filter(k => k !== S.x && k !== S.y)
+      .map(k => ({ k, label: colLabel(k), full: FIELDS[k].label, get: m => val(m, k), fmt: FIELDS[k].fmt })),
+  ];
+  const sc = cols.find(c => c.k === S.sort.key) || cols.find(c => c.k === "y");
+  const rows = [...shown].sort((a, b) => {
+    const va = sc.get(a), vb = sc.get(b);
+    if (va === null) return 1; if (vb === null) return -1;
+    return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * S.sort.dir;
+  });
+  const t = document.getElementById("table"); t.textContent = "";
+  const tr = t.createTHead().insertRow();
+  for (const c of cols) {
+    const th = document.createElement("th");
+    th.textContent = c.label + (c.k === sc.k ? (S.sort.dir < 0 ? "\u00a0↓" : "\u00a0↑") : "");
+    if (c.full && c.full !== c.label) th.title = c.full;
+    if (c.k === sc.k) th.className = "sorted";
+    th.onclick = () => { S.sort = { key: c.k, dir: c.k === sc.k ? -S.sort.dir : (typeof c.get(shown[0] || MODELS[0]) === "string" ? 1 : -1) }; renderTable(shown); };
+    tr.appendChild(th);
+  }
+  const tb = t.createTBody();
+  for (const m of rows) {
+    const r = tb.insertRow();
+    cols.forEach((c, i) => {
+      const v = c.get(m), td = r.insertCell();
+      if (i === 0) { const d = document.createElement("span"); d.className = "dot"; d.style.background = styleFor(m).fill; td.append(d); }
+      const txt = v === null ? "–" : c.fmt(v);
+      td.append(i === 0 && m.aa_url ? aaLink(txt, m.aa_url) : txt);
+    });
+  }
+}
+
+// ---------- controls ----------
+const numericKeys = Object.keys(FIELDS).filter(k => MODELS.some(m => val(m, k) !== null));
+function fillAxis(id) { fillOptions(document.getElementById(id), true); }
+// axis / range dropdown groups, in this order (any core field not listed lands in "Other")
+const CORE_GROUPS = [
+  ["Intelligence", ["intelligence_index", "omniscience", "omniscience_accuracy", "hallucination_rate"]],
+  ["Cost per task", ["cost_per_task_usd", "cost_per_task_input_usd", "cost_per_task_output_usd", "cost_per_task_cache_read_usd",
+    "cost_per_task_cache_write_usd"]],
+  ["Price ($ per 1M tokens)", ["price_input_usd_per_1m", "price_output_usd_per_1m", "price_blended_3to1_usd_per_1m",
+    "price_cache_hit_usd_per_1m", "price_cache_write_usd_per_1m"]],
+  ["Speed", ["time_per_task_min", "output_speed_tok_s", "ttft_s", "ttfat_s", "end_to_end_time_s"]],
+  ["Tokens per task", ["output_tokens_per_task", "reasoning_tokens_per_task", "answer_tokens_per_task"]],
+  ["Model", ["context_window_tokens", "parameters_b", "active_parameters_b", "release_date", "knowledge_cutoff"]],
+];
+function fillOptions(s, withCounts) {
+  s.textContent = "";
+  const core = numericKeys.filter(k => !k.startsWith("score_") && !k.startsWith("capability_"));
+  const grouped = new Set(CORE_GROUPS.flatMap(([, ks]) => ks));
+  const groups = [...CORE_GROUPS.map(([name, ks]) => [name, ks.filter(k => core.includes(k))]),
+    ["Other", core.filter(k => !grouped.has(k))],
+    ["Capability indexes", numericKeys.filter(k => k.startsWith("capability_"))],
+    ["Benchmarks", numericKeys.filter(k => k.startsWith("score_")).sort((a, b) => FIELDS[a].label.localeCompare(FIELDS[b].label))]];
+  for (const [name, keys] of groups) {
+    if (!keys.length) continue;
+    const og = document.createElement("optgroup"); og.label = name;
+    for (const k of keys) {
+      const o = document.createElement("option"); o.value = k;
+      o.textContent = withCounts ? `${FIELDS[k].label} (${MODELS.filter(m => val(m, k) !== null).length})` : shortLabel(k);
+      og.appendChild(o);
+    }
+    s.appendChild(og);
+  }
+}
+fillAxis("xSel"); fillAxis("ySel");
+function setAxis(axis, key) {
+  S[axis] = key;
+  S[axis + "Log"] = !!FIELDS[key].log && !FIELDS[key].date;
+}
+function syncControls() {
+  document.getElementById("xSel").value = S.x; document.getElementById("ySel").value = S.y;
+  document.querySelectorAll("[data-axis]").forEach(b => {
+    const isLog = S[b.dataset.axis + "Log"];
+    b.classList.toggle("on", (b.dataset.scale === "log") === isLog);
+    b.disabled = b.dataset.scale === "log" && FIELDS[S[b.dataset.axis]].date;
+  });
+  document.querySelectorAll("[data-labels]").forEach(b => b.classList.toggle("on", b.dataset.labels === S.labels));
+  document.querySelectorAll("[data-open]").forEach(b => b.classList.toggle("on", b.dataset.open === S.f.open));
+  document.querySelectorAll("[data-psort]").forEach(b => b.classList.toggle("on", b.dataset.psort === S.pickSort));
+  document.getElementById("connect").checked = S.connect;
+  document.getElementById("frontier").checked = S.frontier;
+  document.getElementById("showDep").checked = S.f.showDep;
+  document.getElementById("search").value = S.search;
+}
+function update() { syncControls(); renderRanges(); renderFacetLists(); renderMatch(); draw(); }
+
+document.getElementById("xSel").onchange = e => { setAxis("x", e.target.value); update(); };
+document.getElementById("ySel").onchange = e => { setAxis("y", e.target.value); update(); };
+document.querySelectorAll("[data-axis]").forEach(b => b.onclick = () => { S[b.dataset.axis + "Log"] = b.dataset.scale === "log"; update(); });
+document.querySelectorAll("[data-labels]").forEach(b => b.onclick = () => { S.labels = b.dataset.labels; update(); });
+document.querySelectorAll("[data-open]").forEach(b => b.onclick = () => { S.f.open = b.dataset.open; syncControls(); filterChanged(); });
+document.querySelectorAll("[data-psort]").forEach(b => b.onclick = () => { S.pickSort = b.dataset.psort; syncControls(); renderModelList(); });
+document.getElementById("reset").onclick = () => { S = DEFAULTS(); update(); };
+document.getElementById("connect").onchange = e => { S.connect = e.target.checked; draw(); };
+document.getElementById("frontier").onchange = e => { S.frontier = e.target.checked; syncControls(); draw(); };
+const RANGE_SUGGEST = ["output_speed_tok_s", "price_input_usd_per_1m", "price_output_usd_per_1m", "parameters_b", "release_date", "ttft_s"];
+document.getElementById("addRange").onclick = () => {
+  const used = new Set(S.f.ranges.map(r => r.key));
+  const key = [...RANGE_SUGGEST, ...numericKeys].find(k => !used.has(k) && FIELDS[k]) || "intelligence_index";
+  S.f.ranges.push({ key, min: null, max: null, minText: "", maxText: "" });
+  renderRanges();
+  document.querySelector("#ranges .rrow:last-child select").focus();
+};
+document.getElementById("showDep").onchange = e => { S.f.showDep = e.target.checked; filterChanged(); };
+const FACETS = { creator: () => [S.f.creators, CREATORS], level: () => [S.f.levels, LEVELS], country: () => [S.f.countries, COUNTRIES],  };
+document.getElementById("inputClear").onclick = () => { S.f.inputs.clear(); filterChanged(); };
+document.getElementById("textOnly").onclick = () => {
+  const on = INPUTS.every(k => S.f.inputs.get(k) === "no");
+  S.f.inputs = new Map(on ? [] : INPUTS.map(k => [k, "no"])); filterChanged();
+};
+document.querySelectorAll("[data-all]").forEach(b => b.onclick = () => { const [set, all] = FACETS[b.dataset.all](); all.forEach(v => set.add(v)); filterChanged(); });
+document.querySelectorAll("[data-none]").forEach(b => b.onclick = () => { FACETS[b.dataset.none]()[0].clear(); filterChanged(); });
+document.getElementById("fApply").onclick = () => applyFilter();
+document.getElementById("fReset").onclick = () => { S.f = FILTER_DEFAULTS(); syncControls(); renderRanges(); filterChanged(); };
+document.getElementById("search").oninput = e => { S.search = e.target.value; renderModelList(); };
+document.getElementById("mAll").onclick = () => { LIST_SHOWN.forEach(m => S.picked.add(m.slug)); draw(); };
+document.getElementById("mNone").onclick = () => { LIST_SHOWN.forEach(m => S.picked.delete(m.slug)); draw(); };
+
+const snapDate = new Date(SNAP.snapshot_date + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const AA = "https://artificialanalysis.ai/";
+function aaLink(text, href = AA) {
+  const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = text; return a;
+}
+document.getElementById("brandMeta").append(aaLink("Artificial Analysis"), ` snapshot · ${snapDate} · ${MODELS.length} models`);
+document.getElementById("source").append("Data: ", aaLink("artificialanalysis.ai"), ` model pages + home page, scraped ${SNAP.snapshot_date}. ` +
+  (SNAP.v5_only ? `${MODELS.length} models scored on Intelligence Index v5 (of ${SNAP.catalog_size} in the catalog; older models were never re-run on v5). `
+    : `${MODELS.length} models. `) +
+  "Time per task = Intelligence Index output tokens ÷ output speed (generation time only).");
+
+// see the scroll-latching CSS: while an outer scroll is in progress (wheel events less than ~450ms apart), nested
+// lists ignore the pointer so the wheel keeps scrolling the sidebar/page natively
+{
+  let timer = 0;
+  document.addEventListener("wheel", e => {
+    const html = document.documentElement;
+    if (!html.classList.contains("outer-scrolling") && e.target.closest?.(".models, .tablewrap")) return;  // a list scroll
+    html.classList.add("outer-scrolling");
+    clearTimeout(timer);
+    timer = setTimeout(() => html.classList.remove("outer-scrolling"), 450);
+  }, { passive: true, capture: true });
+}
+
+new ResizeObserver(() => draw()).observe(wrap);
+update();
+</script>
+</body>
+</html>
