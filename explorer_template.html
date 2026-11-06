@@ -1028,8 +1028,9 @@ function fillOptions(s, withCounts) {
 }
 fillAxis("xSel"); fillAxis("ySel");
 function setAxis(axis, key) {
+  // keep the axis's Lin/Log choice when its field changes; only dates can't go on a log axis
   S[axis] = key;
-  S[axis + "Log"] = !!FIELDS[key].log && !FIELDS[key].date;
+  if (FIELDS[key].date) S[axis + "Log"] = false;
 }
 function syncControls() {
   document.getElementById("xSel").value = S.x; document.getElementById("ySel").value = S.y;
