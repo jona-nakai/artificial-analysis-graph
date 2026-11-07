@@ -727,7 +727,7 @@ function el(tag, attrs, parent) {
 }
 const svg = document.getElementById("chart"), tip = document.getElementById("tip"), wrap = document.getElementById("chartWrap");
 const scroller = document.getElementById("scroller"), yaxis = document.getElementById("yaxis");
-let tipFor = null;  // the model the tooltip shows, so a still-on-target move only moves it
+let tipFor = null;  // the model the tooltip shows; it only moves when this changes
 let POINTS = []; // {m, px, py, st}
 
 // a scatter element that belongs to a model family (its line, markers, labels), so a picker hover can light the family up
@@ -1165,8 +1165,11 @@ function barHover(ev) {
   // By model: the dimming and the line do the job, so no tooltip over the bars (click opens the model)
   if (S.barSort === "model") { if (tipFor !== null) { tip.style.display = "none"; tipFor = null; } return focusBar(best); }
   focusBar(best, true);
-  const wr = wrap.getBoundingClientRect();
-  showTip(best.m, ev.clientX - wr.left, ev.clientY - wr.top);
+  // pinned beside the bar, not the pointer, so it holds still while you're on it: the tip's value row sits level with the
+  // bar's value label (or its top), and the tip stays clear of the model names under the bars
+  const a = toWrap(best.x0, Math.min(best.yt, best.y0)), b = toWrap(best.x1, Math.max(best.yt, best.y0));
+  const lr = best.lbl?.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+  showTip(best.m, a.x, b.x, lr ? (lr.top + lr.bottom) / 2 - wr.top : a.y, 10, { row: ".lead", bottom: b.y });
 }
 
 // ---------- hover (nearest point within 12px) ----------
@@ -1175,9 +1178,16 @@ svg.addEventListener("pointermove", ev => {
   const best = pointAt(ev);
   if (!best) return hideTip();
   ringAt(best);
-  showTip(best.m, ev.clientX - wrap.getBoundingClientRect().left, ev.clientY - wrap.getBoundingClientRect().top);
+  const a = toWrap(best.px, best.py);  // pinned beside the point, not the pointer
+  showTip(best.m, a.x, a.x, a.y, 14);
 });
 svg.addEventListener("pointerleave", hideTip);
+scroller.addEventListener("scroll", hideTip);  // a pinned tip would be left pointing at where its bar was
+// a chart (viewBox) position in #chartWrap's pixels, where the tooltip is placed
+function toWrap(x, y) {
+  const r = svg.getBoundingClientRect(), w = wrap.getBoundingClientRect(), k = r.width / svg.viewBox.baseVal.width;
+  return { x: x * k + r.left - w.left, y: y * k + r.top - w.top };
+}
 function hideTip() {
   if (svg._focus) focusBar(null);
   if (tipFor === null) return;
@@ -1193,12 +1203,16 @@ function ringAt(p) {
 }
 // the fields the current graph plots: listed first in the tooltip and the table
 const leadKeys = () => S.view === "bars" ? [S.bar] : [...new Set([S.y, S.x])];
-function showTip(m, cx, cy) {
-  if (tipFor !== m) { fillTip(m); tipFor = m; }
+// the tip goes `gap` px right of the target (x0..x1), or left of it when there's no room; it only moves when the target changes.
+// It's centred on y, or with `row` that row of the tip is; with `bottom` it keeps above that line where it fits
+function showTip(m, x0, x1, cy, gap, { row, bottom } = {}) {
+  if (tipFor === m) return;
+  fillTip(m); tipFor = m;
   tip.style.display = "block";
   const tw = tip.offsetWidth, th = tip.offsetHeight, ww = wrap.clientWidth;
-  tip.style.left = (cx + 18 + tw > ww ? cx - tw - 18 : cx + 18) + "px";
-  tip.style.top = Math.max(0, Math.min(cy - th / 2, wrap.clientHeight - th)) + "px";
+  tip.style.left = Math.max(0, x1 + gap + tw > ww ? x0 - tw - gap : x1 + gap) + "px";
+  const r = row && tip.querySelector(row), top = r ? cy - r.offsetTop - r.offsetHeight / 2 : cy - th / 2;
+  tip.style.top = Math.max(0, Math.min(top, Math.min(bottom ?? Infinity, wrap.clientHeight) - th)) + "px";
 }
 function fillTip(m) {
   tip.textContent = "";
