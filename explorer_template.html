@@ -24,9 +24,16 @@ body { background: var(--page); color: var(--text);
 
 .app { display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: auto minmax(0, 1fr);
   gap: 14px 14px; padding: 14px 16px 16px; height: 100vh; }
-header.top { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 2px 2px 0; }
-.brand { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
-.brand-meta { color: var(--muted); font-size: 12px; }
+/* header: brand and page tabs; Reset off to the right */
+header.top { grid-column: 1 / -1; display: flex; align-items: center; gap: 20px; padding: 0 4px; min-height: 36px; }
+.brand { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 650; letter-spacing: -0.015em; white-space: nowrap; }
+.views.seg { padding: 3px; gap: 2px; border-radius: 9px; }
+.views.seg button { font-size: 13px; padding: 5px 14px; border-radius: 7px; color: var(--text-2); }
+.views.seg button:hover { color: var(--text); }
+.views.seg button.on { color: var(--text); }
+/* Reset: sized and coloured like an unselected tab, hover background included; its edge lines up with the sidebar */
+#reset { font-size: 13px; color: var(--text-2); background: none; border: 0; border-radius: 7px; padding: 5px 12px; margin-right: -4px; }
+#reset:hover { color: var(--text); background: var(--hover); }
 header.top .spacer { flex: 1; }
 main { min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
 aside { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
@@ -102,7 +109,6 @@ svg { display: block; user-select: none; }
 .lbl { fill: var(--text-2); font-size: 11px; pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 /* ---- bar view ---- */
 [hidden] { display: none !important; }
-.views { margin-left: 4px; }
 /* an always-visible scrollbar: styling it opts out of the auto-hiding overlay scrollbars (Chrome/Edge/Safari); the
    standard scrollbar-* properties must be left at auto or Chrome ignores the ::-webkit-scrollbar rules */
 #scroller { overflow-x: auto; overflow-y: hidden; scrollbar-width: auto; scrollbar-color: auto; margin: 0 4px 2px; }
@@ -189,7 +195,10 @@ th:hover, th.sorted { color: var(--text); }
 td .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
 tbody tr:hover td { background: var(--hover); }
 tbody tr:last-child td { border-bottom: 0; }
-.source { color: var(--faint); font-size: 11.5px; padding: 0 4px 4px; }
+/* footnote under the page: where the data comes from */
+.source { color: var(--muted); font-size: 12px; padding: 2px 4px 6px; font-variant-numeric: tabular-nums; }
+.source a { color: var(--text-2); text-decoration: none; }
+.source a:hover { color: var(--text); }
 a { color: inherit; text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 2px; }
 a:hover { color: var(--text); text-decoration-color: var(--text-2); }
 td a { text-decoration: none; }
@@ -364,10 +373,9 @@ html.outer-scrolling .models, html.outer-scrolling .tablewrap { pointer-events: 
 <div class="app">
 <header class="top">
   <span class="brand">Model Explorer</span>
-  <span class="seg views" title="Graph type"><button data-view="scatter">Scatter</button><button data-view="bars">Bars</button><button data-view="model">Model</button><button data-view="compare">Compare</button></span>
-  <span class="brand-meta" id="brandMeta"></span>
+  <nav class="seg views" aria-label="Pages"><button data-view="scatter">Scatter</button><button data-view="bars">Bars</button><button data-view="model">Model</button><button data-view="compare">Compare</button></nav>
   <span class="spacer"></span>
-  <button class="ghost" id="reset" title="Reset graph settings, picks and filters">Reset all</button>
+  <button id="reset" title="Reset the graph settings, picked models and filters">Reset all</button>
 </header>
 
 <main>
@@ -388,7 +396,7 @@ html.outer-scrolling .models, html.outer-scrolling .tablewrap { pointer-events: 
 
 <aside>
   <section class="card settings" id="settingsCard">
-    <div class="card-head"><h2>Graph</h2><span class="hint" id="settingsHint">axes and display</span></div>
+    <div class="card-head"><h2>Graph</h2></div>
     <div class="body" id="scatterSettings">
       <div class="axis"><span class="k">Y</span><select id="ySel" aria-label="Y axis"></select>
         <span class="seg"><button data-axis="y" data-scale="linear">Lin</button><button data-axis="y" data-scale="log">Log</button></span></div>
@@ -419,7 +427,7 @@ html.outer-scrolling .models, html.outer-scrolling .tablewrap { pointer-events: 
   </section>
 
   <section class="card picker" id="pickerCard">
-    <div class="card-head"><h2 id="pickerTitle">Picker</h2><span class="hint" id="pickerHint">choose what's on the graph</span><span class="right" id="pickCount"></span></div>
+    <div class="card-head"><h2 id="pickerTitle">Picker</h2><span class="right" id="pickCount"></span></div>
     <div class="search">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6L14 14"/></svg>
       <input type="search" id="search" placeholder="Search models or labs" aria-label="Search models">
@@ -1810,17 +1818,15 @@ function syncControls() {
   // the model and compare pages swap the chart and table for themselves; the model page's sidebar is a list of models
   // to browse, the compare page's its two pickers
   const model = S.view === "model", graph = S.view === "scatter" || S.view === "bars";
-  for (const id of ["chartCard", "tableCard", "settingsCard", "filterCard", "pickCount", "pickAllNone", "listNoteBox"])
+  for (const id of ["chartCard", "tableCard", "settingsCard", "filterCard", "pickCount", "pickAllNone", "listNoteBox", "reset"])
     document.getElementById(id).hidden = !graph;
   document.getElementById("modelPage").hidden = !model;
   document.getElementById("comparePage").hidden = document.getElementById("compareCard").hidden = S.view !== "compare";
   document.getElementById("pickerCard").hidden = S.view === "compare";
   if (graph) document.title = PAGE_TITLE;
   document.getElementById("pickerTitle").textContent = model ? "Models" : "Picker";
-  document.getElementById("pickerHint").textContent = model ? "" : "choose what's on the graph";
   document.getElementById("scatterSettings").hidden = bars;
   document.getElementById("barSettings").hidden = !bars;
-  document.getElementById("settingsHint").textContent = bars ? "measure and display" : "axes and display";
   document.getElementById("listNote").textContent = `Dimmed: no data for ${bars ? "this measure" : "these axes"}, so not drawn (still pickable)`;
   document.getElementById("rankBtn").title = `Every bar on its own, best on the left (${betterText(S.bar)} for this measure)`;
   document.querySelectorAll("[data-bsort]").forEach(b => b.classList.toggle("on", b.dataset.bsort === S.barSort));
@@ -1891,11 +1897,8 @@ const AA = "https://artificialanalysis.ai/";
 function aaLink(text, href = AA) {
   const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = text; return a;
 }
-document.getElementById("brandMeta").append(aaLink("Artificial Analysis"), ` snapshot · ${snapDate} · ${MODELS.length} models`);
-document.getElementById("source").append("Data: ", aaLink("artificialanalysis.ai"), ` model pages + home page, scraped ${SNAP.snapshot_date}. ` +
-  (SNAP.v5_only ? `${MODELS.length} models scored on Intelligence Index v5 (of ${SNAP.catalog_size} in the catalog; older models were never re-run on v5). `
-    : `${MODELS.length} models. `) +
-  "Time per task = Intelligence Index output tokens ÷ output speed (generation time only).");
+document.getElementById("source").append("Data from ", aaLink("Artificial Analysis"),
+  SNAP.intelligence_index_version ? ` · Intelligence Index v${SNAP.intelligence_index_version}` : "", ` · ${snapDate}`);
 
 // see the scroll-latching CSS: while an outer scroll is in progress (wheel events less than ~450ms apart), nested
 // lists ignore the pointer so the wheel keeps scrolling the sidebar/page natively

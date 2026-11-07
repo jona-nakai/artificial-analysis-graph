@@ -29,6 +29,9 @@ def main():
     if not args.all:
         snap["models"] = [m for m in snap["models"] if m.get("intelligence_index") is not None]
     snap["catalog_size"], snap["v5_only"] = total, not args.all
+    if not snap.get("intelligence_index_version"):  # snapshots from before the scraper recorded it: read the saved pages
+        from scrape import index_version
+        snap["intelligence_index_version"] = index_version(HERE / "data" / "raw" / snap["snapshot_date"])
     snap["models"] = [{k: v for k, v in m.items() if v is not None} for m in snap["models"]]  # nulls just bloat it
     # inline as a JSON <script> block; escape "</" so no value can close the tag
     blob = json.dumps(snap, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")

@@ -142,6 +142,12 @@ def row_of(r: dict) -> dict:
     return row
 
 
+def index_version(raw: Path) -> str | None:
+    """The Intelligence Index version the saved pages state, e.g. "5.0.1" (the highest one named)."""
+    found = {v for f in raw.glob("*.html") for v in re.findall(r"Artificial Analysis Intelligence Index v(\d+(?:\.\d+)*)", f.read_text())}
+    return max(found, key=lambda v: tuple(map(int, v.split("."))), default=None)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", default=dt.date.today().isoformat())
@@ -196,7 +202,8 @@ def main():
         w = csv.DictWriter(f, fieldnames=cols)
         w.writeheader()
         w.writerows(rows)
-    Path(f"{out}.json").write_text(json.dumps({"snapshot_date": args.date, "source": PAGES, "models": rows}, indent=1))
+    Path(f"{out}.json").write_text(json.dumps({"snapshot_date": args.date, "source": PAGES,
+                                           "intelligence_index_version": index_version(raw), "models": rows}, indent=1))
 
     scored = [r for r in rows if r.get("intelligence_index") is not None]
     timed = [r for r in scored if r.get("time_per_task_min") is not None]
