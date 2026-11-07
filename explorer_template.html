@@ -133,6 +133,14 @@ svg { display: block; user-select: none; }
 #chart.focus .bars path.on { fill-opacity: 1; }
 #chart.focus .vlbl:not(.on) { opacity: 0.3; }
 #chart.focus .vlbl.on { fill: var(--text); }
+#chart.focus.soft .bars path:not(.on) { fill-opacity: 0.45; }
+#chart.focus.soft .vlbl:not(.on) { opacity: 0.55; }
+#chart.focus.soft .glbl:not(.on) { opacity: 0.45; }
+/* scatter: a model hovered in the picker; its family stays, the rest fades back */
+#chart.famfocus circle:not(.on):not(.ring) { opacity: 0.15; }
+#chart.famfocus .fline:not(.on) { stroke-opacity: 0.06; }
+#chart.famfocus .fline.on { stroke-opacity: 0.95; stroke-width: 2.25; }
+#chart.famfocus .lbl:not(.on) { opacity: 0.18; }
 .bar-ref { stroke: var(--text-2); stroke-width: 1; stroke-dasharray: 3 4; pointer-events: none; }
 .glbl { font-size: 11.5px; font-weight: 500; }
 .chart-foot { padding: 6px 16px 13px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -307,8 +315,11 @@ a.btn:hover { color: var(--text); background: var(--hover); }
 .models .na input:checked, .models .na input:indeterminate { background: var(--muted); border-color: var(--muted); }
 .models label > svg { width: 8px; height: 8px; flex: none; }
 .models .labsep { height: 1px; background: var(--border); margin: 6px 6px; }
-.list-note { padding: 7px 16px 9px; color: var(--muted); font-size: 11.5px; border-top: 1px solid var(--border); }
-.list-note i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); margin-right: 6px; vertical-align: 0; }
+/* a dimmed picker row: on hover the score on the right gives way to why it isn't drawn */
+.models .why { display: none; order: 9; flex: 0 1 auto; max-width: 58%; margin-left: 10px; color: var(--muted); font-size: 11.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.models .na:hover > .why { display: block; }
+.models .na:hover > .n { display: none; }
 
 /* ---- sidebar: filter ---- */
 .filter { flex: none; }
@@ -438,7 +449,6 @@ html.outer-scrolling .models, html.outer-scrolling .tablewrap { pointer-events: 
       <span class="right" id="pickAllNone"><button class="link" id="mAll">Select all</button><button class="link" id="mNone">Select none</button></span>
     </div>
     <div class="models" id="modelList"></div>
-    <div class="list-note" id="listNoteBox"><i></i><span id="listNote">Dimmed: no data for these axes, so not drawn (still pickable)</span></div>
   </section>
 
   <section class="card filter" id="filterCard">
@@ -622,15 +632,17 @@ function matches(m, f) {
 }
 let S = DEFAULTS();
 // why a model can't be drawn on the current axes (null when it can)
+// why a model can't be drawn, short enough to sit in its picker row ("no Cost per task"); null when it can be
 function missingReason(m) {
-  if (S.view === "bars") {
-    const v = val(m, S.bar);
-    return v === null ? "No value for " + FIELDS[S.bar].label : null;
+  const nm = k => FIELDS[k].label.replace(/^Benchmark: /, "").replace(/\s*\([^)]*\)$/, "");
+  if (S.view === "bars") return val(m, S.bar) === null ? "no " + nm(S.bar) : null;
+  const bad = [];
+  for (const [k, log] of [[S.y, S.yLog], [S.x, S.xLog]]) {
+    const v = val(m, k);
+    if (v === null) bad.push("no " + nm(k)); else if (log && v <= 0) bad.push(nm(k) + " ≤ 0 (log axis)");
   }
-  const x = val(m, S.x), y = val(m, S.y), miss = [];
-  if (y === null) miss.push(FIELDS[S.y].label); else if (S.yLog && y <= 0) miss.push(FIELDS[S.y].label + " (≤ 0 on a log axis)");
-  if (x === null) miss.push(FIELDS[S.x].label); else if (S.xLog && x <= 0) miss.push(FIELDS[S.x].label + " (≤ 0 on a log axis)");
-  return miss.length ? "No value for " + [...new Set(miss)].join(" or ") : null;
+  const u = [...new Set(bad)];
+  return u.length === 2 && u.every(t => t.startsWith("no ")) ? "no data for either axis" : u.join(", ") || null;
 }
 const plottable = m => missingReason(m) === null;
 
@@ -718,6 +730,15 @@ const scroller = document.getElementById("scroller"), yaxis = document.getElemen
 let tipFor = null;  // the model the tooltip shows, so a still-on-target move only moves it
 let POINTS = []; // {m, px, py, st}
 
+// a scatter element that belongs to a model family (its line, markers, labels), so a picker hover can light the family up
+function famEl(k, e) { (svg._fam[k] ||= []).push(e); return e; }
+function famFocus(k) {
+  if (svg._famOn === k) return;
+  for (const e of svg._fam?.[svg._famOn] || []) e.classList.remove("on");
+  svg._famOn = k;
+  svg.classList.toggle("famfocus", k !== null && !!svg._fam?.[k]);
+  for (const e of svg._fam?.[k] || []) e.classList.add("on");
+}
 function marker(parent, cx, cy, st, r) {
   return el("circle", { cx, cy, r, fill: st.fill, stroke: st.ring, "stroke-width": 1.5 }, parent);
 }
@@ -753,7 +774,7 @@ function draw() {
   const shown = picked.filter(plottable);
   const bars = S.view === "bars", what = bars ? "this measure" : "these axes";
   svg.textContent = "";
-  svg._hover = svg._ref = svg._focus = null; tip.style.display = "none"; svg.classList.remove("focus"); POINTS = []; BARS = []; tipFor = null;
+  svg._hover = svg._ref = svg._focus = null; svg._fam = {}; svg._famOn = null; tip.style.display = "none"; svg.classList.remove("focus", "soft", "famfocus"); POINTS = []; BARS = []; tipFor = null;
   yaxis.textContent = ""; yaxis.style.display = "none";
   svg.style.width = "";
   svg.setAttribute("aria-label", bars ? "Bar chart of models" : "Scatter plot of models");
@@ -822,8 +843,8 @@ function drawScatter(shown, W) {
       const ps = fam[k];
       if (ps.length < 2) continue;
       ps.sort((a, b) => LEVELS.indexOf(a.m._level) - LEVELS.indexOf(b.m._level) || a.px - b.px);
-      el("polyline", { points: ps.map(p => `${p.px},${p.py}`).join(" "), fill: "none",
-        stroke: ps[0].st.fill, "stroke-opacity": focus ? 0.1 : 0.42, "stroke-width": 1.5, "stroke-linejoin": "round" }, lg);
+      famEl(k, el("polyline", { points: ps.map(p => `${p.px},${p.py}`).join(" "), fill: "none", class: "fline",
+        stroke: ps[0].st.fill, "stroke-opacity": focus ? 0.1 : 0.42, "stroke-width": 1.5, "stroke-linejoin": "round" }, lg));
     }
   }
 
@@ -833,7 +854,7 @@ function drawScatter(shown, W) {
   const pg = el("g", {}, svg);
   for (const p of FRONT) el("circle", { cx: p.px, cy: p.py, r: 7.5, fill: "none", stroke: cssVar("--text"), "stroke-opacity": 0.6, "stroke-width": 1 }, pg);
   for (const p of focus ? [...POINTS.filter(p => !p.front), ...FRONT] : POINTS) {  // frontier points drawn on top
-    p.node = marker(pg, p.px, p.py, p.st, 4.75);
+    p.node = famEl(FAMILY_KEY(p.m), marker(pg, p.px, p.py, p.st, 4.75));
     if (focus && !p.front) p.node.setAttribute("opacity", 0.2);
   }
 
@@ -894,11 +915,11 @@ function drawScatter(shown, W) {
         el("line", { x1: lead.px + lead.dx / len * 6, y1: lead.py + lead.dy / len * 6,
           x2: tx - lead.dx * 2, y2: ty - 4 + (lead.dy > 0 ? -6 : lead.dy < 0 ? 4 : 0) }, leaders);
       }
-      const t = el("text", { x: tx, y: ty, "text-anchor": anchor, class: "lbl" }, lgp);
+      const t = famEl(FAMILY_KEY(c.at[0].m), el("text", { x: tx, y: ty, "text-anchor": anchor, class: "lbl" }, lgp));
       t.textContent = c.text;
     }
   }
-  svg._hover = el("circle", { r: 8.5, fill: "none", stroke: cssVar("--text"), "stroke-width": 1.5, display: "none" }, svg);
+  svg._hover = el("circle", { class: "ring", r: 8.5, fill: "none", stroke: cssVar("--text"), "stroke-width": 1.5, display: "none" }, svg);
 }
 
 // ---------- bar chart ----------
@@ -1023,7 +1044,7 @@ function drawBars(shown) {
   groups.forEach((grp, gi) => {
     if (labBreak(gi)) x += pad;
     const gw = gws[gi], st = styleFor(grp.ms[0]);
-    const text = (attrs, t) => { el("text", attrs, names).textContent = t; };
+    const text = (attrs, t) => { const e = el("text", attrs, names); e.textContent = t; return e; };
     let bx = x + (gw - inner(grp.ms.length, bw, gap)) / 2;
     for (const m of grp.ms) {
       const v = val(m, key);
@@ -1040,7 +1061,7 @@ function drawBars(shown) {
         text({ x: x + gw / 2, y: bottom + 35 + i * 14, "text-anchor": "middle", class: "glbl", fill: st.fill }, line));
     } else {
       const cx = x + gw / 2, cy = bottom + 12;
-      text({ x: cx + 3, y: cy, "text-anchor": "end", class: "glbl", fill: st.fill,
+      BARS[BARS.length - 1].name = text({ x: cx + 3, y: cy, "text-anchor": "end", class: "glbl", fill: st.fill,
         transform: `rotate(-${NAME_ANGLE} ${cx + 3} ${cy})` }, ellipsize(grp.text, 150, NAME_PX, 500));
     }
     x += gw + pad;
@@ -1076,14 +1097,16 @@ function drawBars(shown) {
   // By model: hovering a bar dims the rest and runs a dotted line across at its value, to read the others against
   svg._ref = el("line", { x1: M.l, x2: Wsvg - M.r, class: "bar-ref", display: "none" }, svg);
 }
-function focusBar(b) {
+// soft (Ranked): only a light dim of the other bars, labels and names, and no line (the tooltip is showing)
+function focusBar(b, soft = false) {
   if (svg._focus === b) return;
-  if (svg._focus) for (const e of [svg._focus.path, svg._focus.lbl, svg._focus.leader]) e?.classList.remove("on");
+  if (svg._focus) for (const e of [svg._focus.path, svg._focus.lbl, svg._focus.leader, svg._focus.name]) e?.classList.remove("on");
   svg._focus = b;
-  svg.classList.toggle("focus", !!b);
+  svg.classList.toggle("focus", !!b); svg.classList.toggle("soft", !!b && soft);
   if (!svg._ref) return;
   if (!b) return svg._ref.setAttribute("display", "none");
-  for (const e of [b.path, b.lbl, b.leader]) e?.classList.add("on");
+  for (const e of [b.path, b.lbl, b.leader, b.name]) e?.classList.add("on");
+  if (soft) return svg._ref.setAttribute("display", "none");
   svg._ref.setAttribute("y1", b.yt); svg._ref.setAttribute("y2", b.yt); svg._ref.setAttribute("display", "");
 }
 // ---- horizontal scrolling: click-and-drag to pan (the browser does the rest) ----
@@ -1109,11 +1132,18 @@ function focusBar(b) {
   scroller.addEventListener("pointerup", end);
   scroller.addEventListener("pointercancel", end);
 }
-// the bar under the pointer: only the bar itself counts (a very short one still gets a 6px-tall target)
+// the bar under the pointer. Sideways each bar's target reaches halfway to its neighbours (at most 14px past its edge), so
+// sliding along the bars never drops into a gap; vertically it's only the bar itself (a very short one gets 6px)
 function barAt(ev) {
   const r = svg.getBoundingClientRect(), k = svg.viewBox.baseVal.width / r.width;
   const x = (ev.clientX - r.left) * k, y = (ev.clientY - r.top) * k;
-  return BARS.find(b => x >= b.x0 && x <= b.x1 && y >= Math.min(b.yt, b.y0, b.y0 - 6) && y <= Math.max(b.yt, b.y0)) || null;
+  const i = BARS.findIndex(b => x < b.x1);  // BARS run left to right
+  const near = [BARS[i - 1], BARS[i]].filter(Boolean).map(b => {
+    const j = BARS.indexOf(b), prev = BARS[j - 1], next = BARS[j + 1];
+    const reachL = Math.min(14, prev ? (b.x0 - prev.x1) / 2 : 14), reachR = Math.min(14, next ? (next.x0 - b.x1) / 2 : 14);
+    return x >= b.x0 - reachL && x <= b.x1 + reachR ? b : null;
+  }).filter(Boolean);
+  return near.find(b => y >= Math.min(b.yt, b.y0, b.y0 - 6) && y <= Math.max(b.yt, b.y0)) || null;
 }
 // the point nearest the pointer, within 12px
 function pointAt(ev) {
@@ -1134,7 +1164,7 @@ function barHover(ev) {
   if (!best) return hideTip();
   // By model: the dimming and the line do the job, so no tooltip over the bars (click opens the model)
   if (S.barSort === "model") { if (tipFor !== null) { tip.style.display = "none"; tipFor = null; } return focusBar(best); }
-  focusBar(null);
+  focusBar(best, true);
   const wr = wrap.getBoundingClientRect();
   showTip(best.m, ev.clientX - wr.left, ev.clientY - wr.top);
 }
@@ -1395,23 +1425,39 @@ function renderModelList() {
   }
   box._shown = null;
   // hovering a row rings that model's point on the scatter (focus: a level row's own point)
+  // hovering a model row lights up its whole family on the graph (everything else fades); a reasoning-level row also
+  // rings / lights its own point or bar
   const show = (ms, focus) => {
-    if (S.view === "bars") return;
-    const p = POINTS.filter(p => focus ? p.m === focus : ms.includes(p.m)).sort((a, b) => iiOf(b.m) - iiOf(a.m))[0]; if (p) ringAt(p);
+    if (S.view === "bars") {
+      const bs = BARS.filter(b => focus ? b.m === focus : ms.includes(b.m));
+      if (focus) return focusBar(bs[0] || null, true);
+      focusBar(null);
+      for (const b of bs) for (const e of [b.path, b.lbl, b.leader, b.name]) e?.classList.add("on");
+      svg._famBars = bs; svg.classList.toggle("focus", bs.length > 0); svg.classList.toggle("soft", bs.length > 0);
+      return;
+    }
+    famFocus(FAMILY_KEY(ms[0]));
+    const p = focus && POINTS.find(p => p.m === focus);
+    if (p) ringAt(p); else if (svg._hover) svg._hover.setAttribute("display", "none");
   };
   const unshow = () => {
     if (tip.style.display === "block") return;
+    if (svg._famBars) { for (const b of svg._famBars) for (const e of [b.path, b.lbl, b.leader, b.name]) e?.classList.remove("on"); svg._famBars = null; }
+    focusBar(null); svg.classList.remove("focus", "soft");
+    famFocus(null);
     if (svg._hover) svg._hover.setAttribute("display", "none");
   };
   const CHEV = '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3.5l3 3 3-3"/></svg>';
   const rowEl = (cls, why) => {
     const r = document.createElement("div"); r.className = cls;
-    if (why) { r.classList.add("na"); r.title = why; }
+    if (why) {  // dimmed: on hover its score gives way to the reason it isn't drawn
+      r.classList.add("na");
+      const w = document.createElement("span"); w.className = "why"; w.textContent = why; r.appendChild(w);
+    }
     return r;
   };
   const scoreEl = (v, title) => {
     const n = document.createElement("span"); n.className = "n"; n.textContent = v < 0 || v === null ? "–" : v.toFixed(1);
-    if (title) n.title = title;
     return n;
   };
   fams.forEach((ms, i) => {
@@ -1425,17 +1471,16 @@ function renderModelList() {
     const row = rowEl("fam-row", why.every(Boolean) && why[0]);
     if (levels) {
       const ch = document.createElement("button"); ch.className = "chev" + (open ? "" : " shut"); ch.innerHTML = CHEV;
-      ch.title = open ? "Hide reasoning levels" : "Show reasoning levels"; ch.setAttribute("aria-expanded", open);
+      ch.setAttribute("aria-label", open ? "Hide reasoning levels" : "Show reasoning levels"); ch.setAttribute("aria-expanded", open);
       ch.onclick = () => { open ? EXPANDED.delete(fk) : EXPANDED.add(fk); renderModelList(); };
       row.appendChild(ch);
     } else { const pad = document.createElement("span"); pad.className = "chev-pad"; row.appendChild(pad); }
     const lab = document.createElement("label");
     const cb = document.createElement("input"); cb.type = "checkbox";
     cb.checked = nPicked === ms.length; cb.indeterminate = nPicked > 0 && nPicked < ms.length;
-    if (ms.length > 1) cb.title = "All reasoning levels";
+    if (ms.length > 1) cb.setAttribute("aria-label", "All reasoning levels");
     cb.onchange = () => { const all = nPicked === ms.length; ms.forEach(m => all ? S.picked.delete(m.slug) : S.picked.add(m.slug)); draw(); };
     const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = famName(ms);
-    if (!open && levels) nm.title = ms.map(m => m._level).join(", ");
     lab.append(cb, dotSvg(ms[0]), nm);
     row.append(lab, scoreEl(bestII(ms), ms.length > 1 ? "Best Intelligence Index" : ""));
     row.onmouseenter = () => show(ms);
@@ -1818,7 +1863,7 @@ function syncControls() {
   // the model and compare pages swap the chart and table for themselves; the model page's sidebar is a list of models
   // to browse, the compare page's its two pickers
   const model = S.view === "model", graph = S.view === "scatter" || S.view === "bars";
-  for (const id of ["chartCard", "tableCard", "settingsCard", "filterCard", "pickCount", "pickAllNone", "listNoteBox", "reset"])
+  for (const id of ["chartCard", "tableCard", "settingsCard", "filterCard", "pickCount", "pickAllNone", "reset"])
     document.getElementById(id).hidden = !graph;
   document.getElementById("modelPage").hidden = !model;
   document.getElementById("comparePage").hidden = document.getElementById("compareCard").hidden = S.view !== "compare";
@@ -1827,7 +1872,6 @@ function syncControls() {
   document.getElementById("pickerTitle").textContent = model ? "Models" : "Picker";
   document.getElementById("scatterSettings").hidden = bars;
   document.getElementById("barSettings").hidden = !bars;
-  document.getElementById("listNote").textContent = `Dimmed: no data for ${bars ? "this measure" : "these axes"}, so not drawn (still pickable)`;
   document.getElementById("rankBtn").title = `Every bar on its own, best on the left (${betterText(S.bar)} for this measure)`;
   document.querySelectorAll("[data-bsort]").forEach(b => b.classList.toggle("on", b.dataset.bsort === S.barSort));
   document.querySelectorAll("[data-axis]").forEach(b => {
