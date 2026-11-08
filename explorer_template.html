@@ -659,11 +659,15 @@ const DEFAULT_PICKED = (() => {
   const keep = new Set(live.filter(m => (val(m, "intelligence_index") ?? -Infinity) > 30).map(FAMILY_KEY));
   return live.filter(m => keep.has(FAMILY_KEY(m))).map(m => m.slug);
 })();
+// whether applying filter f would pick exactly these models (the default selection isn't the default filter's, so the
+// filter starts out "not applied")
+const samePick = (f, slugs) => { const hits = MODELS.filter(m => matches(m, f)), set = new Set(slugs);
+  return hits.length === set.size && hits.every(m => set.has(m.slug)); };
 const DEFAULTS = () => {
   const f = FILTER_DEFAULTS();
   return { x: "cost_per_task_usd", y: "intelligence_index", xLog: false, yLog: false, connect: true, labels: "family", frontier: false,
     view: viewFromHash(), model: parseHash().model || null, cmpA: parseHash().a || null, cmpB: parseHash().b || null, bar: "intelligence_index", barSort: "rank",
-    f, picked: new Set(DEFAULT_PICKED), dirty: false,
+    f, picked: new Set(DEFAULT_PICKED), dirty: !samePick(f, DEFAULT_PICKED),
     pickSort: "lab", search: "", sort: { key: "y", dir: -1 } };
 };
 
@@ -1426,7 +1430,7 @@ function renderMatch() {
   if (S.dirty) { const p = document.createElement("span"); p.className = "pending"; p.textContent = "not applied"; p.title = "Press Apply to use these filters"; st.append(p); }
   document.getElementById("fApply").classList.toggle("idle", !S.dirty);
   document.getElementById("filterTab").classList.toggle("pending", S.dirty);
-  document.getElementById("filterTab").title = S.dirty ? "Filter changes not applied yet" : "";
+  document.getElementById("filterTab").title = S.dirty ? "Filter not applied: the graph shows a different set of models" : "";
 }
 // the sidebar card's tabs: Picker (the model list) and Filter. Graph pages only; the model page's card is just its list
 let SIDE = "picker";
