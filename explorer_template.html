@@ -254,6 +254,15 @@ a.btn:hover { color: var(--text); background: var(--hover); }
 .mtable td:first-child { text-align: left; color: var(--text-2); padding-left: 20px; overflow: hidden; text-overflow: ellipsis; }
 .mtable td:last-child { padding-right: 20px; }
 .mtable td.na { color: var(--faint); }
+/* a model with one level: each section is a grid of label-over-value tiles (like the facts above), not a two-column
+   table whose values sit a card's width away from their labels; the level goes in the header, where the columns' would be */
+.mp-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 15px 20px 11px;
+  border-bottom: 1px solid var(--grid); }
+.mp-sec-head h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); }
+.mp-sec-head span { color: var(--text-2); font-size: 13.5px; font-weight: 500; }
+.mp-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 18px 26px; padding: 16px 20px 19px; }
+.mp-stats span { display: block; color: var(--muted); font-size: 13px; line-height: 1.3; margin-bottom: 4px; }
+.mp-stats b { font-weight: 500; color: var(--text); font-size: 17px; font-variant-numeric: tabular-nums; }
 .mtable th .nh > svg { display: inline-block; vertical-align: 0; margin-right: 7px; }
 /* value columns centred under muted headers (both pages); the model page also shades every other level column */
 .mtable.centred th:not(.sect-title), .mtable.centred td:not(:first-child) { text-align: center; padding-left: 8px; padding-right: 8px; }
@@ -1592,11 +1601,23 @@ function renderModelPage() {
   fact("Status", m => m.deprecated ? "Deprecated" + (m.deprecated_to ? " → " + (MODELS.find(x => x.slug === m.deprecated_to)?._label || m.deprecated_to) : "") : null);
 
   // ---- one card per section, every level a column (lowest effort left) ----
-  const heads = many ? ms.map(m => levelName(m, ms)) : [ms[0]._level !== "Unspecified" ? ms[0]._level : "Value"];
-  const widths = [many ? "250px" : "50%", ...heads.map(() => null)];  // labels a fixed width; the levels share the rest
+  const heads = many ? ms.map(m => levelName(m, ms)) : [];
+  const widths = ["250px", ...heads.map(() => null)];  // labels a fixed width; the levels share the rest
   for (const [group, keys] of fieldGroups(false)) {
     const rows = keys.map(k => [k, ms.map(m => val(m, k))]).filter(([, vs]) => vs.some(v => v !== null));
     if (!rows.length) continue;
+    if (!many) {  // one level: label-over-value tiles
+      const card = mk("section", "card", undefined, page), h = mk("div", "mp-sec-head", undefined, card);
+      mk("h2", "", group, h);
+      if (ms[0]._level !== "Unspecified") mk("span", "", ms[0]._level, h);
+      const grid = mk("div", "mp-stats", undefined, card);
+      for (const [k, [v]] of rows) {
+        const d = mk("div", "", undefined, grid), F = FIELDS[k];
+        d.title = F.label + (F.date ? "" : " · " + betterText(k));
+        mk("span", "", fieldName(k), d); mk("b", "", F.fmt(v), d);
+      }
+      continue;
+    }
     const tb = sectionTable(page, group, heads, widths, { cls: many ? "centred" : "", band: many });
     for (const [k, vs] of rows) {
       const tr = tb.insertRow(), F = FIELDS[k], lc = tr.insertCell();
