@@ -1746,7 +1746,10 @@ const modelMenu = (() => {
       it.dataset.slug = slug;
     }
     if (!items.length) mk("div", "mdd-none", "No models match", list);
-    setAct(t ? 0 : Math.max(0, items.findIndex(x => x.classList.contains("cur"))), true);
+    // the list always opens at the top (the current model keeps its check mark and is what Enter picks; the arrow keys
+    // scroll from there)
+    setAct(t ? 0 : Math.max(0, items.findIndex(x => x.classList.contains("cur"))), false);
+    list.scrollTop = 0;
   }
   function place() {
     const r = owner.getBoundingClientRect(), below = innerHeight - r.bottom - 10, above = r.top - 10;
