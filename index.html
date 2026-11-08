@@ -36,6 +36,9 @@ header.top { grid-column: 1 / -1; display: flex; align-items: center; gap: 20px;
 #reset:hover { color: var(--text); background: var(--hover); }
 header.top .spacer { flex: 1; }
 main { min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
+/* no scroll area sits inside another: the main column scrolls the page's content; the sidebar doesn't scroll (its
+   Picker / Filter card fills what the Graph card leaves, and each tab scrolls its own list). The overflow: auto is
+   only a fallback for a window too short for even that */
 aside { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
@@ -112,13 +115,12 @@ svg { display: block; user-select: none; }
 /* an always-visible scrollbar: styling it opts out of the auto-hiding overlay scrollbars (Chrome/Edge/Safari); the
    standard scrollbar-* properties must be left at auto or Chrome ignores the ::-webkit-scrollbar rules */
 #scroller { overflow-x: auto; overflow-y: hidden; scrollbar-width: auto; scrollbar-color: auto; margin: 0 4px 2px; }
-/* the same always-visible scrollbar on the "Models on the graph" table (it scrolls both ways) */
-.tablewrap { scrollbar-width: auto; scrollbar-color: auto; }
-#scroller::-webkit-scrollbar, .tablewrap::-webkit-scrollbar { width: 10px; height: 10px; }
-#scroller::-webkit-scrollbar-track, .tablewrap::-webkit-scrollbar-track { background: var(--page); border-radius: 999px; }
-#scroller::-webkit-scrollbar-thumb, .tablewrap::-webkit-scrollbar-thumb { background: #3a3a40; border-radius: 999px; border: 2px solid var(--page); }
-#scroller::-webkit-scrollbar-thumb:hover, .tablewrap::-webkit-scrollbar-thumb:hover { background: #55555c; }
-.tablewrap::-webkit-scrollbar-corner { background: var(--surface); }
+/* the same always-visible scrollbar for the "Models on the graph" table's sideways scroll (see .hbar) */
+.hbar { scrollbar-width: auto; scrollbar-color: auto; }
+#scroller::-webkit-scrollbar, .hbar::-webkit-scrollbar { width: 10px; height: 10px; }
+#scroller::-webkit-scrollbar-track, .hbar::-webkit-scrollbar-track { background: var(--page); border-radius: 999px; }
+#scroller::-webkit-scrollbar-thumb, .hbar::-webkit-scrollbar-thumb { background: #3a3a40; border-radius: 999px; border: 2px solid var(--page); }
+#scroller::-webkit-scrollbar-thumb:hover, .hbar::-webkit-scrollbar-thumb:hover { background: #55555c; }
 @supports not selector(::-webkit-scrollbar) { #scroller, .tablewrap { scrollbar-color: #3a3a40 var(--page); } }
 /* the bar chart's y axis: a separate layer over the scroller's left edge, so it never moves while the bars scroll */
 #yaxis { position: absolute; display: none; pointer-events: none; overflow: visible; }
@@ -189,7 +191,25 @@ button.mdd > span { overflow: hidden; text-overflow: ellipsis; }
 .cmp-slot .chips { padding-left: 2px; }
 
 /* ---- table ---- */
-.tablewrap { max-height: 440px; overflow: auto; margin: 10px 0 0; border-top: 1px solid var(--border); border-radius: 0 0 var(--r) var(--r); }
+.tablewrap { margin: 10px 0 0; border-top: 1px solid var(--border); }
+/* the table runs full length: the page scrolls through it, its header pinned to the top as it goes. When it's too wide
+   for the card (.wide) it also scrolls sideways, with the model names pinned on the left and the scrollbar (.hbar, a
+   stand-in synced with it) pinned to the bottom of the window, so it's in reach anywhere in the table; a script keeps
+   the header pinned then, since the sideways scroll box would stop CSS sticky */
+.tablewrap.wide { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.tablewrap.wide::-webkit-scrollbar { display: none; }
+.tablewrap.wide thead { position: relative; z-index: 2; }
+.tablewrap.wide th { position: static; }
+.tablewrap.wide th:first-child, .tablewrap.wide td:first-child { position: sticky; left: 0; z-index: 1;
+  background-color: var(--surface); box-shadow: inset -1px 0 0 var(--border); }
+.tablewrap.wide th:first-child { box-shadow: inset -1px 0 0 var(--border), inset 0 -1px 0 var(--border-strong); }
+.tablewrap.wide #table tbody tr:hover td:first-child { background-color: var(--surface); }  /* opaque under the hover tint */
+.hbar { display: none; position: sticky; bottom: 0; z-index: 3; overflow-x: auto; overflow-y: hidden; background: var(--surface);
+  border-top: 1px solid var(--border); border-radius: 0 0 var(--r) var(--r); padding: 2px 0;  /* no side padding: it would add to the scroll range */ }
+.hbar > div { height: 1px; }
+.tablewrap.wide + .hbar { display: block; }
+#table tbody tr:last-child td:first-child { border-bottom-left-radius: var(--r); }
+#table tbody tr:last-child td:last-child { border-bottom-right-radius: var(--r); }
 table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
 th, td { padding: 6px 10px; text-align: right; white-space: nowrap; }
 td { border-bottom: 1px solid var(--grid); color: var(--text-2); }
@@ -294,7 +314,20 @@ a.btn:hover { color: var(--text); background: var(--hover); }
 .cmp-vs { color: var(--muted); font-size: 13px; letter-spacing: .04em; }
 
 /* ---- sidebar: picker ---- */
-.picker { flex: 1 1 auto; min-height: 420px; display: flex; flex-direction: column; }
+.picker { flex: 1 1 0; min-height: 240px; display: flex; flex-direction: column; }
+/* the card's two tabs (graph pages); the model page shows just its title */
+.side-head { align-items: center; padding-top: 11px; }
+/* tabs, not a toggle: card-title text with an underline on the open one, sitting on a rule across the card, so they don't
+   read like the segmented options (Lab / Intelligence, All / Open / Proprietary) inside it */
+.side-head.tabbed { padding: 0 16px; border-bottom: 1px solid var(--border); }
+.side-tabs { display: flex; gap: 20px; align-self: stretch; }
+.side-tabs button { border: 0; border-radius: 0; background: none; padding: 12px 0 10px; margin-bottom: -1px;
+  font-size: 13px; font-weight: 600; letter-spacing: -0.005em; color: var(--muted); box-shadow: inset 0 -2px 0 transparent; }
+.side-tabs button:hover { color: var(--text-2); background: none; }
+.side-tabs button.on { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); }
+.side-tabs button.pending::after { content: ""; display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--text); margin-left: 6px; vertical-align: 2px; }
+.pane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .search { position: relative; margin: 12px 14px 0; }
 .search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--muted); }
 .search input { width: 100%; padding-left: 30px; }
@@ -330,9 +363,9 @@ a.btn:hover { color: var(--text); background: var(--hover); }
 .models .na:hover > .why { display: block; }
 .models .na:hover > .n { display: none; }
 
-/* ---- sidebar: filter ---- */
-.filter { flex: none; }
-.filter .body { padding: 4px 16px 0; }
+/* ---- sidebar: filter (the card's second tab: its status and buttons stay put, the fields scroll) ---- */
+.filter .body { padding: 4px 16px 0; flex: 1 1 auto; min-height: 0; overflow: auto; border-top: 1px solid var(--border);
+  margin-top: 10px; overscroll-behavior: contain; }
 .field { margin-top: 10px; }
 .field-label { color: var(--text-2); font-size: 12px; }
 .field-head .hint2 { color: var(--faint); font-size: 11.5px; }
@@ -366,7 +399,7 @@ a.btn:hover { color: var(--text); background: var(--hover); }
 .chip.no .n { color: var(--muted); }
 button.link.on { color: var(--text); }
 /* filter header: title, how many match (and whether that's applied yet), then Reset / Apply */
-.fhead { align-items: center; padding-top: 10px; }
+.fhead { align-items: center; padding-top: 12px; }
 .fhead .status { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fhead .status b { color: var(--text-2); font-weight: 500; }
 .fhead .status .pending { color: var(--text-2); margin-left: 6px; }
@@ -376,16 +409,17 @@ button.link.on { color: var(--text); }
 .fhead .factions button { padding: 3px 10px; font-size: 12px; }
 .filter .body { padding-bottom: 14px; }
 
-/* scroll latching: a wheel scroll that started on the page/sidebar keeps going there instead of being caught by
-   a nested list it passes over; one that started in a list stays in that list */
-.models, .tablewrap { overscroll-behavior: contain; }
-html.outer-scrolling .models, html.outer-scrolling .tablewrap { pointer-events: none; }
+/* narrow windows only (the page scrolls as a whole there, with the picker list inside it): a wheel scroll that started on
+   the page keeps going there instead of being caught by the list it passes over; one that started in the list stays */
+.models { overscroll-behavior: contain; }
+html.outer-scrolling .models { pointer-events: none; }
 
 @media (max-width: 960px) {
   .app { grid-template-columns: 1fr; grid-template-rows: auto; height: auto; }
   main, aside { overflow: visible; }
-  .picker { min-height: 0; }
+  .picker { flex: none; min-height: 0; }
   .models { max-height: 560px; }
+  .filter .body { overflow: visible; }
 }
 </style>
 </head>
@@ -409,7 +443,7 @@ html.outer-scrolling .models, html.outer-scrolling .tablewrap { pointer-events: 
 
   <section class="card" id="tableCard">
     <div class="card-head"><h2>Models on the graph</h2></div>
-    <div class="tablewrap"><table id="table"></table></div>
+    <div class="tablewrap"><table id="table"></table></div><div class="hbar" id="tableHbar"><div></div></div>
   </section>
   <div class="source" id="source"></div>
 </main>
@@ -447,7 +481,10 @@ html.outer-scrolling .models, html.outer-scrolling .tablewrap { pointer-events: 
   </section>
 
   <section class="card picker" id="pickerCard">
-    <div class="card-head"><h2 id="pickerTitle">Picker</h2><span class="right" id="pickCount"></span></div>
+    <div class="card-head side-head"><h2 id="pickerTitle">Models</h2>
+      <span class="side-tabs" id="sideTabs" role="tablist"><button data-side="picker" role="tab">Picker</button><button data-side="filter" id="filterTab" role="tab">Filter</button></span>
+      <span class="right" id="pickCount"></span></div>
+    <div class="pane" id="pickerPane">
     <div class="search">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6L14 14"/></svg>
       <input type="search" id="search" placeholder="Search models or labs" aria-label="Search models">
@@ -458,10 +495,9 @@ html.outer-scrolling .models, html.outer-scrolling .tablewrap { pointer-events: 
       <span class="right" id="pickAllNone"><button class="link" id="mAll">Select all</button><button class="link" id="mNone">Select none</button></span>
     </div>
     <div class="models" id="modelList"></div>
-  </section>
-
-  <section class="card filter" id="filterCard">
-    <div class="card-head fhead"><h2>Filter</h2><span class="status" id="matchCount"></span>
+    </div>
+    <div class="pane filter" id="filterPane" hidden>
+    <div class="card-head fhead"><span class="status" id="matchCount"></span>
       <span class="factions"><button id="fReset" class="ghost">Reset</button><button id="fApply" class="primary">Apply</button></span></div>
     <div class="body">
       <div class="field">
@@ -488,6 +524,7 @@ html.outer-scrolling .models, html.outer-scrolling .tablewrap { pointer-events: 
         <div class="field-head">Reasoning level<span class="right"><button class="link" data-all="level">All</button><button class="link" data-none="level">None</button></span></div>
         <div class="chips" id="levelChecks"></div>
       </div>
+    </div>
     </div>
   </section>
 </aside>
@@ -599,7 +636,7 @@ const FAMILY_KEY = m => m._creator + "|" + m.base_model;
 // ---------- state ----------
 // S.f is the filter draft; it only changes what is on the graph when applied (S.picked = models matching it).
 // numeric range filters: any numeric field; a row with neither bound set is ignored
-const RANGE_DEFAULTS = () => [["intelligence_index", 30], ["cost_per_task_usd"], ["time_per_task_min"], ["context_window_tokens"]]
+const RANGE_DEFAULTS = () => [["intelligence_index"], ["cost_per_task_usd"], ["time_per_task_min"], ["context_window_tokens"]]
   .map(([key, min = null]) => ({ key, min, max: null, minText: min === null ? "" : String(min), maxText: "" }));
 const FILTER_DEFAULTS = () => ({ ranges: RANGE_DEFAULTS(), showDep: false, open: "all", inputs: new Map(),  // "Image" -> "yes" (must accept) | "no" (must not)
   creators: new Set(CREATORS), levels: new Set(LEVELS), countries: new Set(COUNTRIES) });
@@ -614,11 +651,19 @@ function parseHash() {
   return { view: "scatter" };
 }
 const viewFromHash = () => parseHash().view;
+// the opening selection: every model scoring above 30 on the Intelligence Index at any of its reasoning levels, with all
+// of its levels picked (deprecated levels aside, as by default elsewhere). The filter can't express "any level" (it tests
+// each variant on its own), so it's built here, from the snapshot, and so follows the data as it updates
+const DEFAULT_PICKED = (() => {
+  const live = MODELS.filter(m => !m.deprecated);
+  const keep = new Set(live.filter(m => (val(m, "intelligence_index") ?? -Infinity) > 30).map(FAMILY_KEY));
+  return live.filter(m => keep.has(FAMILY_KEY(m))).map(m => m.slug);
+})();
 const DEFAULTS = () => {
   const f = FILTER_DEFAULTS();
   return { x: "cost_per_task_usd", y: "intelligence_index", xLog: false, yLog: false, connect: true, labels: "family", frontier: false,
     view: viewFromHash(), model: parseHash().model || null, cmpA: parseHash().a || null, cmpB: parseHash().b || null, bar: "intelligence_index", barSort: "rank",
-    f, picked: new Set(MODELS.filter(m => matches(m, f)).map(m => m.slug)), dirty: false,
+    f, picked: new Set(DEFAULT_PICKED), dirty: false,
     pickSort: "lab", search: "", sort: { key: "y", dir: -1 } };
 };
 
@@ -1380,7 +1425,22 @@ function renderMatch() {
   st.append(b, " match");
   if (S.dirty) { const p = document.createElement("span"); p.className = "pending"; p.textContent = "not applied"; p.title = "Press Apply to use these filters"; st.append(p); }
   document.getElementById("fApply").classList.toggle("idle", !S.dirty);
+  document.getElementById("filterTab").classList.toggle("pending", S.dirty);
+  document.getElementById("filterTab").title = S.dirty ? "Filter changes not applied yet" : "";
 }
+// the sidebar card's tabs: Picker (the model list) and Filter. Graph pages only; the model page's card is just its list
+let SIDE = "picker";
+function syncSide() {
+  const graph = S.view === "scatter" || S.view === "bars", filter = graph && SIDE === "filter";
+  document.getElementById("pickerTitle").hidden = graph;
+  document.getElementById("sideTabs").hidden = !graph;
+  document.querySelector(".side-head").classList.toggle("tabbed", graph);
+  document.getElementById("pickCount").hidden = !graph;  // what's on the graph: the same on both tabs
+  document.getElementById("pickerPane").hidden = filter;
+  document.getElementById("filterPane").hidden = !filter;
+  document.querySelectorAll("[data-side]").forEach(b => { b.classList.toggle("on", b.dataset.side === SIDE); b.setAttribute("aria-selected", b.dataset.side === SIDE); });
+}
+document.querySelectorAll("[data-side]").forEach(b => b.onclick = () => { SIDE = b.dataset.side; syncSide(); });
 function filterChanged() { S.dirty = true; renderFacetLists(); renderMatch(); }
 function applyFilter() {
   const hits = MODELS.filter(m => matches(m, S.f)).map(m => m.slug);
@@ -1527,7 +1587,7 @@ function renderModelList() {
   box.scrollTop = top;
   const pc = document.getElementById("pickCount"); pc.textContent = "";
   const b = document.createElement("b"); b.textContent = S.picked.size;
-  pc.append(b, ` / ${MODELS.length}`);
+  pc.append(b, ` / ${MODELS.length} picked`);
 }
 
 // ---------- model page ----------
@@ -1846,7 +1906,31 @@ function renderTable(shown) {
       else td.append(txt);
     });
   }
+  pinTableHead();
 }
+// the table's header stays at the top while the page scrolls through the table: CSS sticky does it, except when the table
+// scrolls sideways (.wide), which would make its box the header's scroll container; then this moves the header instead
+const tableWrap = document.querySelector(".tablewrap"), tableHbar = document.getElementById("tableHbar");
+// each follows the other (the bar for drags, the table for trackpad / shift+wheel). Their ranges match (see below), and a
+// position that's already in step isn't written back, so the two never nudge each other mid-scroll
+const follow = (from, to) => from.addEventListener("scroll", () => {
+  if (Math.abs(to.scrollLeft - from.scrollLeft) >= 1) to.scrollLeft = from.scrollLeft;
+}, { passive: true });
+follow(tableHbar, tableWrap); follow(tableWrap, tableHbar);
+function pinTableHead() {
+  const t = document.getElementById("table"), head = t.tHead;
+  tableWrap.classList.toggle("wide", t.scrollWidth > tableWrap.clientWidth + 1);
+  // the bar scrolls exactly as far as the table does
+  tableHbar.firstElementChild.style.width = tableHbar.clientWidth + t.scrollWidth - tableWrap.clientWidth + "px";
+  if (!head) return;
+  if (!tableWrap.classList.contains("wide")) { head.style.transform = ""; return; }
+  const top = Math.max(0, document.querySelector("main").getBoundingClientRect().top), r = t.getBoundingClientRect();
+  const dy = Math.max(0, Math.min(top - r.top, r.height - head.offsetHeight));
+  head.style.transform = dy ? `translateY(${dy}px)` : "";
+}
+document.querySelector("main").addEventListener("scroll", pinTableHead, { passive: true });
+window.addEventListener("scroll", pinTableHead, { passive: true });  // narrow windows scroll the page itself
+new ResizeObserver(pinTableHead).observe(tableWrap);
 
 // ---------- controls ----------
 const numericKeys = Object.keys(FIELDS).filter(k => MODELS.some(m => val(m, k) !== null));
@@ -1898,13 +1982,13 @@ function syncControls() {
   // the model and compare pages swap the chart and table for themselves; the model page's sidebar is a list of models
   // to browse, the compare page's its two pickers
   const model = S.view === "model", graph = S.view === "scatter" || S.view === "bars";
-  for (const id of ["chartCard", "tableCard", "settingsCard", "filterCard", "pickCount", "pickAllNone", "reset"])
+  for (const id of ["chartCard", "tableCard", "settingsCard", "pickAllNone", "reset"])
     document.getElementById(id).hidden = !graph;
   document.getElementById("modelPage").hidden = !model;
   document.getElementById("comparePage").hidden = document.getElementById("compareCard").hidden = S.view !== "compare";
   document.getElementById("pickerCard").hidden = S.view === "compare";
   if (graph) document.title = PAGE_TITLE;
-  document.getElementById("pickerTitle").textContent = model ? "Models" : "Picker";
+  syncSide();
   document.getElementById("scatterSettings").hidden = bars;
   document.getElementById("barSettings").hidden = !bars;
   document.getElementById("rankBtn").title = `Every bar on its own, best on the left (${betterText(S.bar)} for this measure)`;
@@ -1979,13 +2063,16 @@ function aaLink(text, href = AA) {
 document.getElementById("source").append("Data from ", aaLink("Artificial Analysis"),
   SNAP.intelligence_index_version ? ` · Intelligence Index v${SNAP.intelligence_index_version}` : "", ` · ${snapDate}`);
 
-// see the scroll-latching CSS: while an outer scroll is in progress (wheel events less than ~450ms apart), nested
-// lists ignore the pointer so the wheel keeps scrolling the sidebar/page natively
+// see the scroll-latching CSS: in a narrow window, while a page scroll is in progress (wheel events less than ~450ms
+// apart), the picker list ignores the pointer so the wheel keeps scrolling the page natively. (A wide window has no list
+// inside a scrolling area, so there's nothing to latch.)
 {
   let timer = 0;
+  const narrow = matchMedia("(max-width: 960px)");
   document.addEventListener("wheel", e => {
     const html = document.documentElement;
-    if (!html.classList.contains("outer-scrolling") && e.target.closest?.(".models, .tablewrap")) return;  // a list scroll
+    if (!narrow.matches) return;
+    if (!html.classList.contains("outer-scrolling") && e.target.closest?.(".models")) return;  // a list scroll
     html.classList.add("outer-scrolling");
     clearTimeout(timer);
     timer = setTimeout(() => html.classList.remove("outer-scrolling"), 450);
