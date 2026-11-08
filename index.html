@@ -305,13 +305,6 @@ a.btn:hover { color: var(--text); background: var(--hover); }
 .mtable.centred td.na { color: var(--faint); }
 .mtable.pair th.diff, .mtable.pair td.diff { border-left: 1px solid var(--border); }
 .mtable.centred td.diff { color: var(--muted); font-size: 13px; }
-.cmp-head { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 24px; align-items: center; padding: 22px 22px; }
-.cmp-side { text-align: center; min-width: 0; }
-.cmp-side .t { display: flex; align-items: center; justify-content: center; gap: 9px; min-width: 0; }
-.cmp-side .t > svg { width: 12px; height: 12px; flex: none; }
-.cmp-side h1 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -0.015em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cmp-side .sub { color: var(--muted); margin-top: 4px; }
-.cmp-vs { color: var(--muted); font-size: 13px; letter-spacing: .04em; }
 
 /* ---- sidebar: picker ---- */
 .picker { flex: 1 1 0; min-height: 240px; display: flex; flex-direction: column; }
@@ -1819,16 +1812,6 @@ function renderComparePage() {
   fillCompareCard(a, b);
   page.textContent = "";
   document.title = `${a._label} vs ${b._label} · Model Explorer`;
-
-  // ---- the two models ----
-  const head = mk("section", "card cmp-head", undefined, page);
-  [a, b].forEach((m, i) => {
-    if (i === 1) mk("span", "cmp-vs", "vs", head);
-    const side = mk("div", "cmp-side", undefined, head), t = mk("div", "t", undefined, side);
-    t.append(dotSvg(m, 11));
-    mk("h1", "", m._label, t).title = m._label;
-    mk("div", "sub", [m._creator, m._country !== "Unknown" ? m._country : null, weightsOf(m)].filter(Boolean).join(" · "), side);
-  });
 
   // ---- one card per section: both values and how the second differs from the first; the better value is highlighted ----
   const nameHead = m => { const e = mk("span", "nh"); e.append(dotSvg(m, 8), m._label); e.title = m._label; return e; };
