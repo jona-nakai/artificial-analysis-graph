@@ -96,6 +96,13 @@ label.sw { display: inline-flex; align-items: center; gap: 7px; color: var(--tex
 .axis { display: flex; align-items: center; gap: 8px; }
 .axis .k { color: var(--muted); font-size: 11px; font-weight: 600; width: 10px; text-align: center; }
 .axis select { flex: 1; width: 0; }
+/* bar layout: it rebuilds the whole chart, so it gets a full row the size of the measure picker above it (lined up under
+   it), with a sketch of each shape, rather than a small toggle */
+.layout-seg { flex: 1; border-color: var(--border-strong); border-radius: 7px; }
+.layout-seg button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 4px 8px; font-size: 13px; border-radius: 5px; }
+.layout-seg button svg { width: 26px; height: 10px; fill: currentColor; opacity: .75; }
+.layout-seg button.on svg { opacity: 1; }
 .display { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0 0 2px; }
 .frontier-row { padding-top: 2px; min-height: 26px; }
 .axis-title .better { fill: var(--muted); }
@@ -115,12 +122,10 @@ svg { display: block; user-select: none; }
 /* an always-visible scrollbar: styling it opts out of the auto-hiding overlay scrollbars (Chrome/Edge/Safari); the
    standard scrollbar-* properties must be left at auto or Chrome ignores the ::-webkit-scrollbar rules */
 #scroller { overflow-x: auto; overflow-y: hidden; scrollbar-width: auto; scrollbar-color: auto; margin: 0 4px 2px; }
-/* the same always-visible scrollbar for the "Models on the graph" table's sideways scroll (see .hbar) */
-.hbar { scrollbar-width: auto; scrollbar-color: auto; }
-#scroller::-webkit-scrollbar, .hbar::-webkit-scrollbar { width: 10px; height: 10px; }
-#scroller::-webkit-scrollbar-track, .hbar::-webkit-scrollbar-track { background: var(--page); border-radius: 999px; }
-#scroller::-webkit-scrollbar-thumb, .hbar::-webkit-scrollbar-thumb { background: #3a3a40; border-radius: 999px; border: 2px solid var(--page); }
-#scroller::-webkit-scrollbar-thumb:hover, .hbar::-webkit-scrollbar-thumb:hover { background: #55555c; }
+#scroller::-webkit-scrollbar { width: 10px; height: 10px; }
+#scroller::-webkit-scrollbar-track { background: var(--page); border-radius: 999px; }
+#scroller::-webkit-scrollbar-thumb { background: #3a3a40; border-radius: 999px; border: 2px solid var(--page); }
+#scroller::-webkit-scrollbar-thumb:hover { background: #55555c; }
 @supports not selector(::-webkit-scrollbar) { #scroller, .tablewrap { scrollbar-color: #3a3a40 var(--page); } }
 /* the bar chart's y axis: a separate layer over the scroller's left edge, so it never moves while the bars scroll */
 #yaxis { position: absolute; display: none; pointer-events: none; overflow: visible; }
@@ -193,8 +198,9 @@ button.mdd > span { overflow: hidden; text-overflow: ellipsis; }
 /* ---- table ---- */
 .tablewrap { margin: 10px 0 0; border-top: 1px solid var(--border); }
 /* the table runs full length: the page scrolls through it, its header pinned to the top as it goes. When it's too wide
-   for the card (.wide) it also scrolls sideways, with the model names pinned on the left and the scrollbar (.hbar, a
-   stand-in synced with it) pinned to the bottom of the window, so it's in reach anywhere in the table; a script keeps
+   for the card (.wide) it also scrolls sideways, with the model names pinned on the left and a scrollbar (.hbar, drawn
+   here and driving the table's own scroll, so there's one scroll position and nothing to fall out of step) pinned to
+   the bottom of the window, so it's in reach anywhere in the table; a script keeps
    the header pinned then, since the sideways scroll box would stop CSS sticky */
 .tablewrap.wide { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .tablewrap.wide::-webkit-scrollbar { display: none; }
@@ -204,10 +210,13 @@ button.mdd > span { overflow: hidden; text-overflow: ellipsis; }
   background-color: var(--surface); box-shadow: inset -1px 0 0 var(--border); }
 .tablewrap.wide th:first-child { box-shadow: inset -1px 0 0 var(--border), inset 0 -1px 0 var(--border-strong); }
 .tablewrap.wide #table tbody tr:hover td:first-child { background-color: var(--surface); }  /* opaque under the hover tint */
-.hbar { display: none; position: sticky; bottom: 0; z-index: 3; overflow-x: auto; overflow-y: hidden; background: var(--surface);
-  border-top: 1px solid var(--border); border-radius: 0 0 var(--r) var(--r); padding: 2px 0;  /* no side padding: it would add to the scroll range */ }
-.hbar > div { height: 1px; }
+.hbar { display: none; position: sticky; bottom: 0; z-index: 3; background: var(--surface); border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--r) var(--r); padding: 3px 6px; touch-action: none; user-select: none; }
 .tablewrap.wide + .hbar { display: block; }
+/* styled like the chart's scrollbar */
+.hbar-track { position: relative; height: 10px; border-radius: 999px; background: var(--page); }
+.hbar-thumb { position: absolute; top: 2px; bottom: 2px; left: 0; border-radius: 999px; background: #3a3a40; }
+.hbar-thumb:hover, .hbar-thumb.drag { background: #55555c; }
 #table tbody tr:last-child td:first-child { border-bottom-left-radius: var(--r); }
 #table tbody tr:last-child td:last-child { border-bottom-right-radius: var(--r); }
 table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -437,7 +446,7 @@ html.outer-scrolling .models { pointer-events: none; }
 
   <section class="card" id="tableCard">
     <div class="card-head"><h2>Models on the graph</h2></div>
-    <div class="tablewrap"><table id="table"></table></div><div class="hbar" id="tableHbar"><div></div></div>
+    <div class="tablewrap"><table id="table"></table></div><div class="hbar" id="tableHbar"><div class="hbar-track"><div class="hbar-thumb"></div></div></div>
   </section>
   <div class="source" id="source"></div>
 </main>
@@ -460,9 +469,10 @@ html.outer-scrolling .models { pointer-events: none; }
     </div>
     <div class="body" id="barSettings" hidden>
       <div class="axis"><span class="k">Y</span><select id="barSel" aria-label="Bar measure"></select></div>
-      <div class="display">
-        <span class="seg" title="Bar order"><button data-bsort="rank" id="rankBtn">Ranked</button><button data-bsort="model" title="A model's reasoning levels side by side (lowest effort left); a lab's models together, newest release first">By model</button></span>
-      </div>
+      <div class="axis"><span class="k"></span><div class="seg layout-seg" role="radiogroup" aria-label="Bar layout">
+        <button data-bsort="rank" id="rankBtn" role="radio"><svg viewBox="0 0 58 22" aria-hidden="true"><rect x="2" y="2" width="4" height="20" rx="1"/><rect x="8" y="4" width="4" height="18" rx="1"/><rect x="14" y="6" width="4" height="16" rx="1"/><rect x="20" y="7" width="4" height="15" rx="1"/><rect x="26" y="9" width="4" height="13" rx="1"/><rect x="32" y="11" width="4" height="11" rx="1"/><rect x="38" y="12" width="4" height="10" rx="1"/><rect x="44" y="14" width="4" height="8" rx="1"/><rect x="50" y="16" width="4" height="6" rx="1"/></svg>Ranked</button>
+        <button data-bsort="model" role="radio" title="A model's reasoning levels side by side (lowest effort left); a lab's models together, newest release first"><svg viewBox="0 0 58 22" aria-hidden="true"><rect x="2" y="14" width="4" height="8" rx="1"/><rect x="7" y="10" width="4" height="12" rx="1"/><rect x="12" y="6" width="4" height="16" rx="1"/><rect x="21" y="16" width="4" height="6" rx="1"/><rect x="26" y="11" width="4" height="11" rx="1"/><rect x="31" y="4" width="4" height="18" rx="1"/><rect x="40" y="12" width="4" height="10" rx="1"/><rect x="45" y="8" width="4" height="14" rx="1"/><rect x="50" y="5" width="4" height="17" rx="1"/></svg>By model</button>
+      </div></div>
     </div>
   </section>
 
@@ -1031,7 +1041,12 @@ function drawBars(shown) {
   const W = scroller.clientWidth;  // svg units are px here, so the axis layer lines up exactly
   const key = S.bar, grouped = S.barSort === "model", groups = barGroups(shown);
   // horizontal layout: natural sizes, stretched to fill the card (up to 1.8x); never squeezed, so a wide chart scrolls
-  const base = grouped ? { bar: 22, gap: 6, pad: 22, minG: 80 } : { bar: 18, gap: 0, pad: 7, minG: 0 };
+  // (By model's bars are spaced at a bit over half the widest number: every bar keeps its number flat above it, sliding over a
+  // shorter neighbour or stepping up a line on a leader when two would touch; the gap takes a small share of the spacing)
+  const txt = new Map(shown.map(m => [m, barFmt(key, val(m, key))]));
+  const maxLW = Math.max(...[...txt.values()].map(t => textW(t, 10.5)));
+  const pitch = Math.max(15, Math.ceil(maxLW * 0.6 + 5)), lgap = Math.max(2, Math.round(pitch * 0.14));
+  const base = grouped ? { bar: pitch - lgap, gap: lgap, pad: 14, minG: 56 } : { bar: 18, gap: 0, pad: 7, minG: 0 };
   // y scale: linear, always from 0 (a bar's length is its value), out to a round tick
   const vals = shown.map(m => val(m, key));
   let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
@@ -1055,7 +1070,8 @@ function drawBars(shown) {
     gws.forEach((gw, i) => { lead = Math.max(lead, nameW[i] * NAME_COS + 12 - (rel + gw / 2)); rel += gw + pad; });
     return Math.ceil(lead);
   };
-  const k = Math.max(1, Math.min(1.8, (avail - leadFor(groups.map(() => base.bar), base.pad)) / natural));
+  // (By model's tight base may stretch to 3x, so a handful of models still get bars as wide as they used to)
+  const k = Math.max(1, Math.min(grouped ? 3 : 1.8, (avail - leadFor(groups.map(() => base.bar), base.pad)) / natural));
   const bw = base.bar * k, gap = base.gap * k, pad = base.pad * k, minG = base.minG * k;
   const gws = groups.map(g => Math.max(inner(g.ms.length, bw, gap), minG));
   const lead = leadFor(gws, pad);
@@ -1063,9 +1079,8 @@ function drawBars(shown) {
   const Wsvg = Math.max(W, Math.ceil(M.l + lead + content + M.r));
 
   // value labels decide the top margin: flat ones need a line, vertical ones their full width
-  const txt = new Map(shown.map(m => [m, barFmt(key, val(m, key))]));
-  const maxLW = Math.max(...[...txt.values()].map(t => textW(t, 10.5)));
-  const vertical = maxLW > (bw + (grouped ? gap : pad)) * 1.45;
+  // Ranked turns its labels upright when they're wider than the spacing (By model is spaced to fit them flat)
+  const vertical = !grouped && maxLW > (bw + pad) * 1.45;
   M.t = 34 + (vertical ? maxLW + 8 : 26);
   const maxNameW = Math.max(...nameW);
   M.b = grouped ? 64 : Math.round(20 + maxNameW * NAME_SIN);
@@ -1133,16 +1148,22 @@ function drawBars(shown) {
         continue;
       }
       const w = textW(t, 10.5), ty0 = neg ? b.yt + 13 : b.yt - 5;
-      let ty = ty0;
-      if (!neg) for (let i = 0; i < 40 && ty > 14; i++) {  // lift above whatever it hits
-        const box = { x0: b.cx - w / 2 - 1, x1: b.cx + w / 2 + 1, y0: ty - 10, y1: ty + 2 };
-        const hit = obstacles.find(o => o.b !== b && box.x0 < o.x1 && box.x1 > o.x0 && box.y0 < o.y1 && box.y1 > o.y0);
-        if (!hit) break;
-        ty = Math.max(14, hit.y0 - 3);
-      }
-      obstacles.push({ x0: b.cx - w / 2 - 1, x1: b.cx + w / 2 + 1, y0: ty - 10, y1: ty + 2 });
+      // a label wider than its bar may slide sideways (still covering its own bar) over a shorter neighbour, so it
+      // can sit lower; of centred, slid left and slid right, the lowest wins (centred on a tie)
+      const slide = Math.max(0, (w - bw) / 2 - 1), lowest = cx => {
+        let ty = ty0;
+        if (!neg) for (let i = 0; i < 40 && ty > 14; i++) {  // lift above whatever it hits
+          const box = { x0: cx - w / 2 - 1, x1: cx + w / 2 + 1, y0: ty - 10, y1: ty + 2 };
+          const hit = obstacles.find(o => o.b !== b && box.x0 < o.x1 && box.x1 > o.x0 && box.y0 < o.y1 && box.y1 > o.y0);
+          if (!hit) break;
+          ty = Math.max(14, hit.y0 - 3);
+        }
+        return { cx, ty };
+      };
+      const { cx, ty } = [b.cx, b.cx - slide, b.cx + slide].map(lowest).reduce((a, c) => c.ty > a.ty + 0.5 ? c : a);
+      obstacles.push({ x0: cx - w / 2 - 1, x1: cx + w / 2 + 1, y0: ty - 10, y1: ty + 2 });
       if (ty < ty0 - 1) b.leader = el("line", { x1: b.cx, x2: b.cx, y1: b.yt - 2, y2: ty + 3 }, leaders);
-      b.lbl = el("text", { x: b.cx, y: ty, "text-anchor": "middle", class: "vlbl" }, lg);
+      b.lbl = el("text", { x: cx, y: ty, "text-anchor": "middle", class: "vlbl" }, lg);
       b.lbl.textContent = t;
     }
   }
@@ -1899,18 +1920,49 @@ function renderTable(shown) {
 }
 // the table's header stays at the top while the page scrolls through the table: CSS sticky does it, except when the table
 // scrolls sideways (.wide), which would make its box the header's scroll container; then this moves the header instead
-const tableWrap = document.querySelector(".tablewrap"), tableHbar = document.getElementById("tableHbar");
-// each follows the other (the bar for drags, the table for trackpad / shift+wheel). Their ranges match (see below), and a
-// position that's already in step isn't written back, so the two never nudge each other mid-scroll
-const follow = (from, to) => from.addEventListener("scroll", () => {
-  if (Math.abs(to.scrollLeft - from.scrollLeft) >= 1) to.scrollLeft = from.scrollLeft;
-}, { passive: true });
-follow(tableHbar, tableWrap); follow(tableWrap, tableHbar);
+const tableWrap = document.querySelector(".tablewrap");
+// the drawn scrollbar under the table: it only shows the table's scroll position and sets it, never keeps its own
+const hTrack = document.querySelector("#tableHbar .hbar-track"), hThumb = hTrack.firstElementChild;
+const hGeom = () => {
+  const max = tableWrap.scrollWidth - tableWrap.clientWidth, tw = hTrack.clientWidth;
+  const w = Math.min(tw, Math.max(32, tw * tableWrap.clientWidth / tableWrap.scrollWidth));
+  return { max, tw, w, per: max / Math.max(1, tw - w) };  // per: table pixels per pixel of thumb travel
+};
+function syncThumb() {
+  const { max, tw, w } = hGeom();
+  if (max <= 0 || !tw) return;
+  hThumb.style.width = w + "px";
+  hThumb.style.transform = `translateX(${(tw - w) * tableWrap.scrollLeft / max}px)`;
+}
+tableWrap.addEventListener("scroll", syncThumb, { passive: true });  // trackpad / shift+wheel on the table itself
+// drag the thumb; or press the track to jump there and keep dragging
+hTrack.addEventListener("pointerdown", e => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const { per, w } = hGeom(), left = hTrack.getBoundingClientRect().left;
+  const thumbX = hThumb.getBoundingClientRect().left - left;
+  const grab = e.target === hThumb ? e.clientX - left - thumbX : w / 2;
+  const to = x => { tableWrap.scrollLeft = (x - left - grab) * per; };
+  if (e.target !== hThumb) to(e.clientX);
+  try { hTrack.setPointerCapture(e.pointerId); } catch {}
+  hThumb.classList.add("drag");
+  const move = ev => to(ev.clientX);
+  const up = () => {
+    hThumb.classList.remove("drag");
+    for (const [t, f] of [["pointermove", move], ["pointerup", up], ["pointercancel", up]]) hTrack.removeEventListener(t, f);
+  };
+  hTrack.addEventListener("pointermove", move); hTrack.addEventListener("pointerup", up); hTrack.addEventListener("pointercancel", up);
+});
+// a sideways wheel or trackpad swipe over the bar scrolls the table (an up/down one still scrolls the page)
+document.getElementById("tableHbar").addEventListener("wheel", e => {
+  const dx = e.deltaX || (e.shiftKey ? e.deltaY : 0);
+  if (!dx) return;
+  e.preventDefault(); tableWrap.scrollLeft += dx;
+}, { passive: false });
 function pinTableHead() {
   const t = document.getElementById("table"), head = t.tHead;
   tableWrap.classList.toggle("wide", t.scrollWidth > tableWrap.clientWidth + 1);
-  // the bar scrolls exactly as far as the table does
-  tableHbar.firstElementChild.style.width = tableHbar.clientWidth + t.scrollWidth - tableWrap.clientWidth + "px";
+  syncThumb();
   if (!head) return;
   if (!tableWrap.classList.contains("wide")) { head.style.transform = ""; return; }
   const top = Math.max(0, document.querySelector("main").getBoundingClientRect().top), r = t.getBoundingClientRect();
@@ -1981,7 +2033,7 @@ function syncControls() {
   document.getElementById("scatterSettings").hidden = bars;
   document.getElementById("barSettings").hidden = !bars;
   document.getElementById("rankBtn").title = `Every bar on its own, best on the left (${betterText(S.bar)} for this measure)`;
-  document.querySelectorAll("[data-bsort]").forEach(b => b.classList.toggle("on", b.dataset.bsort === S.barSort));
+  document.querySelectorAll("[data-bsort]").forEach(b => { b.classList.toggle("on", b.dataset.bsort === S.barSort); b.setAttribute("aria-checked", b.dataset.bsort === S.barSort); });
   document.querySelectorAll("[data-axis]").forEach(b => {
     const isLog = S[b.dataset.axis + "Log"];
     b.classList.toggle("on", (b.dataset.scale === "log") === isLog);
