@@ -37,7 +37,7 @@ header.top { grid-column: 1 / -1; display: flex; align-items: center; gap: 20px;
 header.top .spacer { flex: 1; }
 main { min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 2px; }
 /* no scroll area sits inside another: the main column scrolls the page's content; the sidebar doesn't scroll (its
-   Picker / Filter card fills what the Graph card leaves, and each tab scrolls its own list). The overflow: auto is
+   Models / Filter card fills what the Graph card leaves, and each tab scrolls its own list). The overflow: auto is
    only a fallback for a window too short for even that */
 aside { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
 
@@ -482,7 +482,7 @@ html.outer-scrolling .models { pointer-events: none; }
 
   <section class="card picker" id="pickerCard">
     <div class="card-head side-head"><h2 id="pickerTitle">Models</h2>
-      <span class="side-tabs" id="sideTabs" role="tablist"><button data-side="picker" role="tab">Picker</button><button data-side="filter" id="filterTab" role="tab">Filter</button></span>
+      <span class="side-tabs" id="sideTabs" role="tablist"><button data-side="picker" role="tab">Models</button><button data-side="filter" id="filterTab" role="tab">Filter</button></span>
       <span class="right" id="pickCount"></span></div>
     <div class="pane" id="pickerPane">
     <div class="search">
@@ -851,7 +851,7 @@ function draw() {
     const H = Math.max(420, Math.min(660, Math.round(W * 0.56)));
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("height", H);
     const t = el("text", { x: W / 2, y: H / 2, "text-anchor": "middle", class: "empty-msg" }, svg);
-    t.textContent = picked.length ? `None of the picked models have values for ${what}.` : "No models picked. Use the Picker or a Filter.";
+    t.textContent = picked.length ? `None of the picked models have values for ${what}.` : "No models picked. Pick some in Models, or apply a Filter.";
     return;
   }
   bars ? drawBars(shown) : drawScatter(shown, W);
@@ -1432,7 +1432,7 @@ function renderMatch() {
   document.getElementById("filterTab").classList.toggle("pending", S.dirty);
   document.getElementById("filterTab").title = S.dirty ? "Filter not applied: the graph shows a different set of models" : "";
 }
-// the sidebar card's tabs: Picker (the model list) and Filter. Graph pages only; the model page's card is just its list
+// the sidebar card's tabs: Models (the model list) and Filter. Graph pages only; the model page's card is just its list
 let SIDE = "picker";
 function syncSide() {
   const graph = S.view === "scatter" || S.view === "bars", filter = graph && SIDE === "filter";
