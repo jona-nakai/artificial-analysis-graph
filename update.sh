@@ -28,7 +28,7 @@ $PY build.py
 # raw pages are only needed for --offline re-parsing; keep two weeks
 find data/raw -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf {} +
 
-paths=(index.html "$snap" "data/models_$today.csv" data/model_ids.json)
+paths=(index.html "$snap" "data/models_$today.csv" data/model_ids.json data/first_seen.json)
 git add -- "${paths[@]}"
 if git diff --cached --quiet -- "${paths[@]}"; then
     echo "no changes to publish"

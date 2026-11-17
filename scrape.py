@@ -13,6 +13,9 @@ modalities, token counts or cost breakdown). Those records are matched to slugs 
 data/model_ids.json (every id -> slug ever seen in a full record), their static metadata is filled in from the newest
 earlier snapshot that has the model, and their benchmark keys are mapped onto the score_* columns by matching values
 against models that also have a full record. Models never seen in a full record get a slug derived from their name.
+Static metadata (release date, modalities, license, ...) missing from today's records is filled in from earlier
+snapshots for every model, since some pages embed trimmed copies. Each row also gets first_seen, the date of the first
+snapshot that had the model (data/first_seen.json): new models often show up before AA lists their release date.
 
 Only ~110 models have a current Intelligence Index: older models were not scored on the index's current version.
 
@@ -34,6 +37,8 @@ HERE = Path(__file__).resolve().parent
 BASE = "https://artificialanalysis.ai"
 PAGES = {"home": f"{BASE}/", "sitemap": f"{BASE}/sitemap.xml", "leaderboard": f"{BASE}/leaderboards/models"}
 IDS = HERE / "data" / "model_ids.json"  # model id -> slug, from every full record seen
+FIRST_SEEN = HERE / "data" / "first_seen.json"  # slug -> date of the first snapshot that had it
+HISTORY = 30  # earlier snapshots searched for a model's metadata
 # model pages known to embed the full catalog, tried first; then sitemap model pages in order
 CATALOG_PAGES = ["claude-opus-5-high", "claude-3-opus", "gpt-4o"]
 MAX_TRIES = 6
@@ -183,15 +188,24 @@ def score_keys(pairs: list[tuple[dict, dict]]) -> dict[str, str]:
 
 
 def previous_rows(before: str, slugs: set[str]) -> dict[str, dict]:
-    """The newest row of each slug from snapshots older than `before`."""
-    out = {}
-    for f in sorted((HERE / "data").glob("models_*.json"), reverse=True):
-        if f.stem.removeprefix("models_") >= before or not slugs - out.keys():
-            continue
+    """Each slug's newest known value of every field, from the last HISTORY snapshots older than `before`."""
+    out: dict[str, dict] = {}
+    snaps = [f for f in sorted((HERE / "data").glob("models_*.json"), reverse=True) if f.stem.removeprefix("models_") < before]
+    for f in snaps[:HISTORY]:
         for r in json.loads(f.read_text())["models"]:
             if r["slug"] in slugs:
-                out.setdefault(r["slug"], r)
+                o = out.setdefault(r["slug"], {})
+                for k, v in r.items():
+                    if v is not None and k not in o:
+                        o[k] = v
     return out
+
+
+# fields that describe the model rather than today's measurements: safe to fill from an earlier snapshot
+STATIC = ("base_model", "creator", "creator_color", "creator_country", "is_open_weights", "open_source_category", "license",
+          "deprecated_to", "release_date", "knowledge_cutoff", "parameters_b", "active_parameters_b", "size_class",
+          "context_window_tokens", "input_modalities", "output_modalities", "is_multimodal")
+is_static = lambda k: k in STATIC or k.startswith(("input_modality_", "output_modality_"))
 
 
 # depend on the run's tokens and cost breakdown; dropped from a carried-over row when today's cost per task differs
@@ -266,7 +280,7 @@ def main():
             if slug in rows or slug in lb_rows or slug in ids.values():
                 slug += "-" + m["id"][:8]
         lb_rows[slug] = lb_row(m, slug)
-    prev = previous_rows(args.date, {s for s in lb_rows if s not in rows})
+    prev = previous_rows(args.date, set(rows) | set(lb_rows))
     keymap = score_keys([(r, rows.get(s) or prev[s]) for s, r in lb_rows.items() if s in rows or s in prev])
     added = 0
     for slug, r in lb_rows.items():
@@ -285,6 +299,15 @@ def main():
     missing = [s for s in site_models if s not in rows]
     if missing:
         print(f"  {len(missing)} sitemap model URLs have no record (often non-model pages):", ", ".join(missing[:12]))
+
+    for slug, r in rows.items():  # trimmed copies lack static metadata an earlier snapshot has
+        r |= {k: v for k, v in prev.get(slug, {}).items() if is_static(k) and r.get(k) is None}
+
+    first = json.loads(FIRST_SEEN.read_text()) if FIRST_SEEN.exists() else {}
+    for slug, r in rows.items():
+        first[slug] = min(first.get(slug, args.date), args.date)
+        r["first_seen"] = first[slug]
+    FIRST_SEEN.write_text(json.dumps(dict(sorted(first.items())), indent=0))
 
     rows = sorted(rows.values(), key=lambda r: -(r.get("intelligence_index") or -1))
     country = {r["creator"]: r["creator_country"] for r in rows if r.get("creator") and r.get("creator_country")}

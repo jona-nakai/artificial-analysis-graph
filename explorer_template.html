@@ -495,7 +495,7 @@ html.outer-scrolling .models { pointer-events: none; }
     </div>
     <div class="listbar">
       <span class="lbl2">Sort</span>
-      <span class="seg"><button data-psort="lab">Lab</button><button data-psort="ii">Intelligence</button></span>
+      <span class="seg"><button data-psort="date">Newest</button><button data-psort="lab">Lab</button><button data-psort="ii">Intelligence</button></span>
       <span class="right" id="pickAllNone"><button class="link" id="mAll">Select all</button><button class="link" id="mNone">Select none</button></span>
     </div>
     <div class="models" id="modelList"></div>
@@ -672,7 +672,7 @@ const DEFAULTS = () => {
   return { x: "cost_per_task_usd", y: "intelligence_index", xLog: false, yLog: false, connect: true, labels: "family", frontier: false,
     view: viewFromHash(), model: parseHash().model || null, cmpA: parseHash().a || null, cmpB: parseHash().b || null, bar: "intelligence_index", barSort: "rank",
     f, picked: new Set(DEFAULT_PICKED), dirty: !samePick(f, DEFAULT_PICKED),
-    pickSort: "lab", search: "", sort: { key: "y", dir: -1 } };
+    pickSort: "date", search: "", sort: { key: "y", dir: -1 } };
 };
 
 // ---------- filtering ----------
@@ -1476,16 +1476,24 @@ let LIST_SHOWN = [];
 const LAB_ORDER = ["OpenAI", "Anthropic", "Google", "Meta", "SpaceXAI", "DeepSeek", "Alibaba", "Kimi", "Z AI", "MiniMax",
   "Xiaomi", "Tencent", "Mistral", "Thinking Machines"];
 const iiOf = m => val(m, "intelligence_index") ?? -1;
-const BEST = { lab: {}, famDate: {} };  // a lab's best score; a family's newest release date
+// a lab's best score; a family's newest release date, or, when AA lists none for any of its levels yet (brand-new
+// models), the day the scraper first saw it
+const BEST = { lab: {}, famDate: {}, famSeen: {} };
 for (const m of MODELS) {
   BEST.lab[m._creator] = Math.max(BEST.lab[m._creator] ?? -1, iiOf(m));
-  const d = m.release_date || "", k = FAMILY_KEY(m);
+  const d = m.release_date || "", s = m.first_seen || "", k = FAMILY_KEY(m);
   if (d > (BEST.famDate[k] || "")) BEST.famDate[k] = d;
+  if (s && (!BEST.famSeen[k] || s < BEST.famSeen[k])) BEST.famSeen[k] = s;
 }
+const famDate = m => { const k = FAMILY_KEY(m); return BEST.famDate[k] || BEST.famSeen[k] || ""; };
+// "Newest": model families by release date, newest first, under a month heading
+const byDate = (a, b) => famDate(b[0]).localeCompare(famDate(a[0])) || bestII(b) - bestII(a) || a[0].name.localeCompare(b[0].name);
+const monthOf = ms => { const d = famDate(ms[0]);
+  return d ? new Date(d.slice(0, 7) + "-15").toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "Release date unknown"; };
 function labRank(c) { const i = LAB_ORDER.indexOf(c); return i >= 0 ? i : LAB_ORDER.length + 100 - (BEST.lab[c] ?? -1) / 100; }
 function byLab(a, b) {
   return labRank(a._creator) - labRank(b._creator) || a._creator.localeCompare(b._creator)
-    || (BEST.famDate[FAMILY_KEY(b)] || "").localeCompare(BEST.famDate[FAMILY_KEY(a)] || "")  // newest family first
+    || famDate(b).localeCompare(famDate(a))  // newest family first
     || FAMILY_KEY(a).localeCompare(FAMILY_KEY(b))
     || levelRank(a) - levelRank(b) || iiOf(b) - iiOf(a) || a.name.localeCompare(b.name);
 }
@@ -1500,9 +1508,13 @@ const EXPANDED = new Set();  // model families whose reasoning levels are unfold
 function renderModelList() {
   const q = S.search.trim().toLowerCase();
   const hit = m => !q || [m.name, m._creator, m.base_model || ""].some(t => t.toLowerCase().includes(q));
-  const byLabMode = S.pickSort === "lab";
-  const fams = FAMILIES.filter(ms => ms.some(hit))
-    .sort(byLabMode ? (a, b) => byLab(a[0], b[0]) : (a, b) => bestII(b) - bestII(a) || a[0].name.localeCompare(b[0].name));
+  const byLabMode = S.pickSort === "lab", byDateMode = S.pickSort === "date";
+  const fams = FAMILIES.filter(ms => ms.some(hit)).sort(byLabMode ? (a, b) => byLab(a[0], b[0]) : byDateMode ? byDate
+    : (a, b) => bestII(b) - bestII(a) || a[0].name.localeCompare(b[0].name));
+  const head = (ms, i) => {  // a lab or month heading above the first family of each group
+    if (byLabMode && (i === 0 || ms[0]._creator !== fams[i - 1][0]._creator)) labHead(box, ms[0]._creator);
+    if (byDateMode && (i === 0 || monthOf(ms) !== monthOf(fams[i - 1]))) labHead(box, monthOf(ms));
+  };
   LIST_SHOWN = fams.flat();
   const box = document.getElementById("modelList"), top = box.scrollTop;
   box.textContent = "";
@@ -1510,7 +1522,7 @@ function renderModelList() {
     const cur = famSlug(currentFamily()[0]);
     let curRow = null;
     fams.forEach((ms, i) => {
-      if (byLabMode && (i === 0 || ms[0]._creator !== fams[i - 1][0]._creator)) labHead(box, ms[0]._creator);
+      head(ms, i);
       const row = document.createElement("button"); row.className = "fam-row browse";
       if (famSlug(ms[0]) === cur) { row.classList.add("cur"); row.setAttribute("aria-current", "page"); curRow = row; }
       const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = famName(ms);
@@ -1563,7 +1575,7 @@ function renderModelList() {
     return n;
   };
   fams.forEach((ms, i) => {
-    if (byLabMode && (i === 0 || ms[0]._creator !== fams[i - 1][0]._creator)) labHead(box, ms[0]._creator);
+    head(ms, i);
     const fk = FAMILY_KEY(ms[0]), why = ms.map(missingReason), nPicked = ms.filter(m => S.picked.has(m.slug)).length;
     const levels = !(ms.length === 1 && !LEVEL_ABBR[ms[0]._level]);  // a lone variant with no level: just the one row
     const open = levels && EXPANDED.has(fk);
