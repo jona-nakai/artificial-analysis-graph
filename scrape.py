@@ -5,8 +5,14 @@ the catalog for their comparison charts (~730 models, incl. deprecated and older
 every model page in the sitemap). Pages of the current headline models instead load that list from an encrypted
 data file (which this deliberately does not touch) and embed only ~30 models, so the scraper reads the sitemap and
 tries model pages until one carries (nearly) the whole catalog, merging records from every page it fetched. The home
-page charts are merged in too, since brand-new models can show up there first. (The /leaderboards/models page holds
-a ~280-model subset with identical values.)
+page charts are merged in too, since brand-new models can show up there first.
+
+Since 2026-11-14 no model page carries the full catalog any more, so the /leaderboards/models page is read as well: it
+embeds a ~280-model list ("initialModels") with the same values but in a slimmer shape (no slug, release date,
+modalities, token counts or cost breakdown). Those records are matched to slugs by their stable id via
+data/model_ids.json (every id -> slug ever seen in a full record), their static metadata is filled in from the newest
+earlier snapshot that has the model, and their benchmark keys are mapped onto the score_* columns by matching values
+against models that also have a full record. Models never seen in a full record get a slug derived from their name.
 
 Only ~110 models have a current Intelligence Index: older models were not scored on the index's current version.
 
@@ -26,7 +32,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 BASE = "https://artificialanalysis.ai"
-PAGES = {"home": f"{BASE}/", "sitemap": f"{BASE}/sitemap.xml"}
+PAGES = {"home": f"{BASE}/", "sitemap": f"{BASE}/sitemap.xml", "leaderboard": f"{BASE}/leaderboards/models"}
+IDS = HERE / "data" / "model_ids.json"  # model id -> slug, from every full record seen
 # model pages known to embed the full catalog, tried first; then sitemap model pages in order
 CATALOG_PAGES = ["claude-opus-5-high", "claude-3-opus", "gpt-4o"]
 MAX_TRIES = 6
@@ -142,6 +149,57 @@ def row_of(r: dict) -> dict:
     return row
 
 
+def leaderboard(payload: str) -> list[dict]:
+    """The leaderboard's "initialModels" list (slim records without a slug)."""
+    i = payload.find('"initialModels":')
+    return json.JSONDecoder().raw_decode(payload, i + len('"initialModels":'))[0] if i >= 0 else []
+
+
+def lb_row(m: dict, slug: str) -> dict:
+    """A leaderboard record as a row: reshaped into a full record for row_of, then the benchmark scores kept aside."""
+    r = {k: v for k, v in m.items() if k not in ("scores", "paramClass", "priceClass", "outputSpeed", "timeToFirstToken",
+                                                  "timeToFirstAnswerToken", "intelligenceIndexCostPerTask")}
+    r |= {"slug": slug, "sizeClass": m.get("paramClass"),
+          "creator": {"name": m.get("modelCreatorName"), "color": m.get("modelCreatorColor")},
+          "headline": {k: m.get(k) for k in ("outputSpeed", "timeToFirstToken", "timeToFirstAnswerToken")},
+          "intelligenceIndexCostPerTask": {"cost": {"total": m.get("intelligenceIndexCostPerTask")}}}
+    if m.get("price1mInputTokens") is not None and m.get("price1mOutputTokens") is not None:
+        r["price1mBlended0To3To1"] = (3 * m["price1mInputTokens"] + m["price1mOutputTokens"]) / 4
+    row = {k: v for k, v in row_of(r).items() if v is not None and not k.startswith("score_")}
+    row["aa_scores"] = m.get("scores") or {}
+    return row
+
+
+def score_keys(pairs: list[tuple[dict, dict]]) -> dict[str, str]:
+    """Leaderboard benchmark key -> score_* column, learned from (leaderboard row, full row) pairs of the same model."""
+    votes: dict[str, dict[str, int]] = {}
+    for lb, full in pairs:
+        for k, v in lb["aa_scores"].items():
+            for col, w in full.items():
+                if col.startswith("score_") and isinstance(w, (int, float)) and abs(w - v) <= 1e-9 * max(1, abs(v)):
+                    votes.setdefault(k, {}).setdefault(col, 0)
+                    votes[k][col] += 1
+    return {k: max(c, key=c.get) for k, c in votes.items()}
+
+
+def previous_rows(before: str, slugs: set[str]) -> dict[str, dict]:
+    """The newest row of each slug from snapshots older than `before`."""
+    out = {}
+    for f in sorted((HERE / "data").glob("models_*.json"), reverse=True):
+        if f.stem.removeprefix("models_") >= before or not slugs - out.keys():
+            continue
+        for r in json.loads(f.read_text())["models"]:
+            if r["slug"] in slugs:
+                out.setdefault(r["slug"], r)
+    return out
+
+
+# depend on the run's tokens and cost breakdown; dropped from a carried-over row when today's cost per task differs
+PER_RUN = ("cost_per_task_input_usd", "cost_per_task_cache_read_usd", "cost_per_task_cache_write_usd",
+           "cost_per_task_output_usd", "cost_per_task_reasoning_usd", "cost_per_task_answer_usd",
+           "output_tokens_per_task", "reasoning_tokens_per_task", "answer_tokens_per_task")
+
+
 def index_version(raw: Path) -> str | None:
     """The Intelligence Index version the saved pages state, e.g. "5.0.1" (the highest one named)."""
     found = {v for f in raw.glob("*.html") for v in re.findall(r"Artificial Analysis Intelligence Index v(\d+(?:\.\d+)*)", f.read_text())}
@@ -188,11 +246,51 @@ def main():
         if len(found) >= 0.9 * len(site_models):  # this page carries (nearly) the whole catalog
             break
     print("model pages read:", ", ".join(tried), f"| sitemap lists {len(site_models)} model URLs")
-    missing = [s for s in site_models if s not in recs]
+
+    ids = json.loads(IDS.read_text()) if IDS.exists() else {}
+    ids |= {r["id"]: slug for slug, r in recs.items()}
+    IDS.write_text(json.dumps(dict(sorted(ids.items())), indent=0))
+    rows = {slug: row_of(r) for slug, r in recs.items()}
+
+    try:
+        lb = leaderboard(next_payload(page("leaderboard.html", PAGES["leaderboard"])))
+    except Exception as e:
+        print(f"  leaderboard: {e}")
+        lb = []
+    lb_rows = {}
+    for m in lb:
+        slug = ids.get(m["id"])
+        if not slug:  # never seen in a full record: AA's slug is release slug + first suffix word, mostly
+            slug = m["release"]["slug"] + ("-" + re.sub(r"[^a-z0-9]+", "-", m["suffix"].split(",")[0].lower()).strip("-")
+                                           if m.get("suffix") else "")
+            if slug in rows or slug in lb_rows or slug in ids.values():
+                slug += "-" + m["id"][:8]
+        lb_rows[slug] = lb_row(m, slug)
+    prev = previous_rows(args.date, {s for s in lb_rows if s not in rows})
+    keymap = score_keys([(r, rows.get(s) or prev[s]) for s, r in lb_rows.items() if s in rows or s in prev])
+    added = 0
+    for slug, r in lb_rows.items():
+        scores = {keymap[k]: v for k, v in r.pop("aa_scores").items() if k in keymap}
+        if slug in rows:  # today's full record wins; the leaderboard only fills its gaps (charts embed trimmed copies)
+            rows[slug] |= {k: v for k, v in (scores | r).items() if rows[slug].get(k) is None}
+            continue
+        base = dict(prev.get(slug) or {})
+        if base.get("cost_per_task_usd") != r.get("cost_per_task_usd"):
+            base = {k: v for k, v in base.items() if k not in PER_RUN}
+        rows[slug] = base | scores | r
+        added += 1
+    print(f"leaderboard: {len(lb)} models, {added} not on the model pages read "
+          f"({sum(s in prev for s in lb_rows if s not in recs)} with metadata from an earlier snapshot), "
+          f"{len(keymap)} benchmark keys mapped")
+    missing = [s for s in site_models if s not in rows]
     if missing:
         print(f"  {len(missing)} sitemap model URLs have no record (often non-model pages):", ", ".join(missing[:12]))
 
-    rows = sorted((row_of(r) for r in recs.values()), key=lambda r: -(r.get("intelligence_index") or -1))
+    rows = sorted(rows.values(), key=lambda r: -(r.get("intelligence_index") or -1))
+    country = {r["creator"]: r["creator_country"] for r in rows if r.get("creator") and r.get("creator_country")}
+    for r in rows:  # leaderboard-only models have no country; the creator's other models do
+        if not r.get("creator_country"):
+            r["creator_country"] = country.get(r.get("creator"))
     pages = set(site_models)
     for r in rows:  # link to the model's own AA page when the sitemap has one
         r["aa_url"] = f"{BASE}/models/{r['slug']}" if r["slug"] in pages else None
