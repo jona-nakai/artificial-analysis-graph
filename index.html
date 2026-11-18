@@ -333,9 +333,9 @@ a.btn:hover { color: var(--text); background: var(--hover); }
 .search { position: relative; margin: 12px 14px 0; }
 .search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--muted); }
 .search input { width: 100%; padding-left: 30px; }
-.listbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px 8px; }
+.listbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 14px 8px; }
 .listbar .lbl2 { color: var(--muted); font-size: 12px; }
-.listbar .right { margin-left: auto; display: flex; gap: 10px; }
+.listbar .right { margin-left: auto; display: flex; gap: 10px; white-space: nowrap; }
 .models { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 2px 8px 6px; border-top: 1px solid var(--border); }
 /* a model row (its checkbox takes every reasoning level) with its levels listed under it */
 .models .fam-row, .models .lvl-row { display: flex; align-items: center; border-radius: 6px; padding-right: 8px; }
