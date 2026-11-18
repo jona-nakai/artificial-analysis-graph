@@ -495,7 +495,7 @@ html.outer-scrolling .models { pointer-events: none; }
     </div>
     <div class="listbar">
       <span class="lbl2">Sort</span>
-      <span class="seg"><button data-psort="date">Newest</button><button data-psort="lab">Lab</button><button data-psort="ii">Intelligence</button></span>
+      <span class="seg"><button data-psort="lab">Lab</button><button data-psort="date">Newest</button><button data-psort="ii">Intelligence</button></span>
       <span class="right" id="pickAllNone"><button class="link" id="mAll">Select all</button><button class="link" id="mNone">Select none</button></span>
     </div>
     <div class="models" id="modelList"></div>
@@ -672,7 +672,7 @@ const DEFAULTS = () => {
   return { x: "cost_per_task_usd", y: "intelligence_index", xLog: false, yLog: false, connect: true, labels: "family", frontier: false,
     view: viewFromHash(), model: parseHash().model || null, cmpA: parseHash().a || null, cmpB: parseHash().b || null, bar: "intelligence_index", barSort: "rank",
     f, picked: new Set(DEFAULT_PICKED), dirty: !samePick(f, DEFAULT_PICKED),
-    pickSort: "date", search: "", sort: { key: "y", dir: -1 } };
+    pickSort: "lab", search: "", sort: { key: "y", dir: -1 } };
 };
 
 // ---------- filtering ----------
