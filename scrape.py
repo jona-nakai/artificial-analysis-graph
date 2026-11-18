@@ -231,7 +231,7 @@ def main():
 
     def page(name: str, url: str) -> str:
         path = raw / name
-        if not args.offline and not path.exists():
+        if not args.offline:  # always refetch online, so a same-day re-run picks up models added since
             path.write_text(fetch(url))
             time.sleep(1)  # be polite
         return path.read_text()
